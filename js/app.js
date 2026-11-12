@@ -27,9 +27,11 @@ const kindLabel = (k) => t(KINDS.find(([x]) => x === k)?.[1] ?? '');
 const groupOf = (kind) => (kind === 'goggles' || kind === 'radio' ? 'ground' : 'drone');
 
 // Слоти за типом: [категорія, власна назва слота]. Для BNF слоти необов'язкові — порожні просто не показуються в «Скопіювати збірку».
+// Мотор — окрема деталь у своєму слоті: міняють їх поштучно.
+const MOTORS = [1, 2, 3, 4].map((n) => ['motors', `Мотор ${n}`]);
 const SLOTS = {
-  self: [['frame'], ['motors'], ['fc'], ['esc', 'Регулятор / стек'], ['vtx'], ['camera'], ['rx'], ['gps'], ['antenna', 'Антена VTX'], ['antenna', 'Антена RX'], ['props']],
-  bnf: [['frame'], ['aio'], ['motors'], ['camera'], ['vtx'], ['props']],
+  self: [['frame'], ...MOTORS, ['fc'], ['esc', 'Регулятор / стек'], ['vtx'], ['camera'], ['rx'], ['gps'], ['antenna', 'Антена VTX'], ['antenna', 'Антена RX'], ['props']],
+  bnf: [['frame'], ['aio'], ...MOTORS, ['camera'], ['vtx'], ['props']],
   goggles: [['vrx'], ['antenna', 'Антени'], ['gbattery', 'Батарея']],
   radio: [['txmodule', 'Внутрішній модуль'], ['txmodule', 'Зовнішній модуль']],
 };
@@ -108,8 +110,18 @@ const findOrder = (id) => state.orders.find((x) => x.id === id);
 const findBattery = (id) => state.batteries.find((x) => x.id === id);
 const findPhoto = (id) => (id ? state.photos.find((x) => x.id === id) : null);
 
-async function refresh() {
+/** Прочитати базу; дані старого вигляду (з іншого пристрою, Диска чи копії) спершу оновити. */
+async function load() {
   state = await db.loadAll();
+  const fix = migrate(state);
+  if (fix) {
+    await db.write(fix);
+    state = await db.loadAll();
+  }
+}
+
+async function refresh() {
+  await load();
   render();
   refreshSheets();
 }
@@ -125,19 +137,75 @@ const slotLabel = (s) => s.label || (s.tpl ? t(s.tpl) : catLabel(s.cat));
 const prefs = () => state.prefs.find((p) => p.id === 'settings') ?? { id: 'settings' };
 const staleDays = () => num(prefs().staleDays) || 3;
 
-/** Вартість дрона: свій кошт (BNF, рама шолома) + деталі, що на ньому стоять, із долею доставки. */
-const droneCost = (d) => num(d.price) + d.slots.reduce((s, sl) => s + num(findItem(sl.itemId)?.price), 0);
-
 const orderK = (o) => (o.currency === 'USD' ? num(o.rate) || rateOn(o.date) || 0 : 1);
 const orderSub = (o) => o.lines.reduce((s, l) => s + num(l.price) * num(l.qty), 0);
 const orderTotal = (o) => round2((orderSub(o) + num(o.shipping)) * orderK(o));
+/** Ціна штуки позиції в гривнях із її часткою доставки. */
+const lineUah = (o, l) => round2(num(l.price) * (1 + (orderSub(o) ? num(o.shipping) / orderSub(o) : 0)) * orderK(o));
 
-/** Вкладено в хобі: замовлення + куплене без замовлення + дрони й батареї − продане. */
+/** Позиція замовлення, якою куплено дрон чи шолом цілим (d.buy = { orderId, lineId }). */
+function boughtLine(d) {
+  const o = d.buy ? findOrder(d.buy.orderId) : null;
+  const l = o?.lines.find((x) => x.id === d.buy.lineId);
+  return l ? { o, l } : null;
+}
+
+/** Свій кошт дрона (BNF, шолом): з позиції замовлення, а без неї — ціна, вписана вручну. */
+const droneOwn = (d) => { const b = boughtLine(d); return b ? lineUah(b.o, b.l) : num(d.price); };
+
+/** Вартість дрона: свій кошт + деталі, що на ньому стоять, із долею доставки. */
+const droneCost = (d) => droneOwn(d) + d.slots.reduce((s, sl) => s + num(findItem(sl.itemId)?.price), 0);
+
+/** Вкладено в хобі: замовлення + куплене без замовлення + дрони й батареї − продане. Дрон із позиції замовлення вже в замовленні. */
 function invested() {
   return state.orders.reduce((s, o) => s + orderTotal(o), 0)
     + state.items.reduce((s, it) => s + (it.orderId ? 0 : num(it.price)) - (it.status === 'sold' ? num(it.soldPrice) : 0), 0)
-    + state.drones.reduce((s, d) => s + num(d.price), 0)
+    + state.drones.reduce((s, d) => s + (boughtLine(d) ? 0 : num(d.price)), 0)
     + state.batteries.reduce((s, b) => s + num(b.price), 0);
+}
+
+// ---------- оновлення даних старих версій ----------
+
+// «… ×4» наприкінці моделі мотора — комплект із чотирьох однією деталлю (так заводили до 0.1.4)
+const SET4 = /\s*[×xXхХ]\s*4$/;
+
+/**
+ * 0.1.x → 0.1.4: слот «Мотори» з комплектом ×4 стає чотирма слотами «Мотор 1–4», комплект — чотирма деталями
+ * (перша — той самий запис, ціна й сума продажу діляться порівну, копійки залишку — першій), позиція замовлення —
+ * чотирма штуками за чверть ціни: підсумки не змінюються. id нових записів похідні від старих, тож два пристрої,
+ * що оновили ті самі дані, дають ті самі записи, і синхронізація їх не подвоює. Повертає зміни для db.write або null.
+ */
+function migrate(st) {
+  const items = [];
+  const parts = new Map();
+  const quarter = (v, i) => (v === null || v === undefined ? v : i ? round2(num(v) / 4) : round2(num(v) - 3 * round2(num(v) / 4)));
+  for (const it of st.items) {
+    if (it.kind !== 'unit' || it.cat !== 'motors' || !SET4.test(it.model ?? '')) continue;
+    const ids = [it.id, `${it.id}-m2`, `${it.id}-m3`, `${it.id}-m4`];
+    parts.set(it.id, ids);
+    const model = it.model.replace(SET4, '') || it.model;
+    const history = [...(it.history ?? []), { date: today(), text: t('Комплект ×4 розділено на 4 мотори') }];
+    ids.forEach((id, i) => items.push({ ...it, id, model, price: quarter(it.price, i), ...('soldPrice' in it ? { soldPrice: quarter(it.soldPrice, i) } : {}), history }));
+  }
+  const orders = st.orders.filter((o) => o.lines.some((l) => l.itemIds?.some((id) => parts.has(id)))).map((o) => ({
+    ...o,
+    lines: o.lines.map((l) => (l.kind === 'consumable' || !l.itemIds?.length || !l.itemIds.every((id) => parts.has(id)) ? l
+      : { ...l, model: (l.model ?? '').replace(SET4, '') || l.model, price: num(l.price) / 4, qty: num(l.qty) * 4, itemIds: l.itemIds.flatMap((id) => parts.get(id)) })),
+  }));
+  const drones = [];
+  for (const d of st.drones) {
+    let changed = false;
+    const slots = d.slots.flatMap((s) => {
+      const ids = parts.get(s.itemId);
+      if (!ids && !(s.cat === 'motors' && !s.tpl && !s.label)) return [s];
+      changed = true;
+      return [0, 1, 2, 3].map((i) => ({
+        ...s, id: i ? `${s.id}-m${i + 1}` : s.id, ...(s.label ? { label: `${s.label} ${i + 1}` } : { tpl: `Мотор ${i + 1}` }), itemId: i ? ids?.[i] ?? null : s.itemId,
+      }));
+    });
+    if (changed) drones.push({ ...d, slots });
+  }
+  return items.length || drones.length ? { items: { put: items }, orders: { put: orders }, drones: { put: drones } } : null;
 }
 
 // ---------- фото ----------
@@ -167,13 +235,71 @@ function thumbImg(photoId, fallback = '') {
   return p ? h('img', { class: 'thumb', src: p.thumb, alt: '' }) : h('span', { class: 'thumb mono', style: '--h: 25' }, fallback);
 }
 
-async function showPhoto(id) {
-  const p = findPhoto(id);
-  if (!p) return;
-  const blob = await db.getBlob(id);
-  const url = blob ? URL.createObjectURL(blob) : p.thumb;
-  sheet(t('Фото'), h('img', { class: 'photo-full', src: url, alt: '' }), { full: true, onClose: () => blob && URL.revokeObjectURL(url) });
+/** Фото на весь екран: двома пальцями — збільшити, подвійний тап — 1× / 2.5×, змах убік — сусіднє фото зі списку ids. */
+function showPhoto(id, ids = [id]) {
+  const list = ids.filter((x) => findPhoto(x));
+  let at = Math.max(0, list.indexOf(id));
+  if (!list.length) return;
+  let url = null;
+  const img = h('img', { class: 'photo-full', alt: '', draggable: 'false' });
+  const count = h('p', { class: 'muted small photo-count' });
+  let z = { s: 1, x: 0, y: 0 };
+  const apply = () => { img.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.s})`; };
+  const show = async () => {
+    const p = findPhoto(list[at]);
+    z = { s: 1, x: 0, y: 0 };
+    apply();
+    if (url) URL.revokeObjectURL(url);
+    url = null;
+    img.src = p.thumb;
+    count.textContent = list.length > 1 ? `${at + 1} / ${list.length}` : '';
+    const blob = await db.getBlob(p.id);
+    if (blob && list[at] === p.id) { url = URL.createObjectURL(blob); img.src = url; }
+  };
+  const pts = new Map();
+  let start = null;
+  const snap = () => {
+    const [a, b] = [...pts.values()];
+    start = { ...z, a: { ...a }, dist: b ? Math.hypot(a.x - b.x, a.y - b.y) : 0, n: pts.size };
+  };
+  const wrap = h('div', {
+    class: 'photo-wrap',
+    onpointerdown: (e) => {
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      snap();
+      try { wrap.setPointerCapture(e.pointerId); } catch { /* вказівник уже відпущено */ }
+    },
+    onpointermove: (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const [a, b] = [...pts.values()];
+      if (b && start.dist) z.s = Math.min(5, Math.max(1, start.s * (Math.hypot(a.x - b.x, a.y - b.y) / start.dist)));
+      else if (!b && start.s > 1) { z.x = start.x + a.x - start.a.x; z.y = start.y + a.y - start.a.y; }
+      apply();
+    },
+    ondblclick: () => { z = z.s > 1 ? { s: 1, x: 0, y: 0 } : { s: 2.5, x: 0, y: 0 }; apply(); },
+  }, img);
+  const up = (e) => {
+    const p = pts.get(e.pointerId);
+    if (!p) return;
+    pts.delete(e.pointerId);
+    const dx = p.x - start.a.x;
+    // Змах одним пальцем без збільшення — до сусіднього фото
+    if (e.type === 'pointerup' && start.n === 1 && !pts.size && z.s === 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(p.y - start.a.y)) {
+      const next = at + (dx < 0 ? 1 : -1);
+      if (next >= 0 && next < list.length) { at = next; show(); }
+    }
+    if (z.s <= 1) { z = { s: 1, x: 0, y: 0 }; apply(); }
+    if (pts.size) snap();
+  };
+  wrap.addEventListener('pointerup', up);
+  wrap.addEventListener('pointercancel', up);
+  show();
+  sheet(t('Фото'), h('div', { class: 'photo-view' }, wrap, count), { full: true, onClose: () => url && URL.revokeObjectURL(url) });
 }
+
+/** Усі фото дрона по порядку: сам дрон, далі нотатки від нових до старих. */
+const dronePhotos = (d) => [d.photoId, ...[...(d.notes ?? [])].sort((a, b) => collate(b.date, a.date)).map((n) => n.photoId)].filter(Boolean);
 
 const monogram = (name) => String(name ?? '').split(/[\s-]+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase() || '?';
 
@@ -213,11 +339,22 @@ function renderDrones() {
 
 function droneForm(d = null) {
   let kind = d?.kind ?? 'self';
+  // Позиції «дрон чи шолом цілим», ще не прив'язані до іншого дрона
+  const taken = new Set(state.drones.filter((x) => x.id !== d?.id && boughtLine(x)).map((x) => `${x.buy.orderId}|${x.buy.lineId}`));
+  const lines = [...state.orders].sort((a, b) => collate(b.date, a.date)).flatMap((o) => o.lines
+    .filter((l) => l.kind === 'drone' && !taken.has(`${o.id}|${l.id}`))
+    .map((l) => [`${o.id}|${l.id}`, `${o.shop} · ${[l.brand, l.model].filter(Boolean).join(' ')} · ${fmt.date(o.date)}`]));
   const f = form([
     { name: 'name', label: t('Назва'), value: d?.name, required: true, placeholder: t('напр. 5″ фристайл') },
+    ...(lines.length ? [{ name: 'buy', label: t('Покупка'), type: 'select', options: [['', t('Ціна вручну')], { group: t('Із замовлення'), options: lines }],
+      value: boughtLine(d ?? {}) ? `${d.buy.orderId}|${d.buy.lineId}` : '' }] : []),
     { name: 'price', label: t('Ціна, грн'), type: 'number', value: d?.price, half: true, hint: t('Для BNF чи шолома; деталі рахуються окремо') },
     { name: 'buyDate', label: t('Куплено'), type: 'dmy', value: d?.buyDate, half: true },
   ]);
+  // Куплено замовленням — ціна й дата звідти, ручні поля ховаємо
+  const hand = () => { for (const n of ['price', 'buyDate']) f.inputs[n].closest('.field').hidden = Boolean(f.inputs.buy?.value); };
+  f.inputs.buy?.addEventListener('change', hand);
+  hand();
   const kinds = chips(KINDS.map(([k, l]) => [k, t(l)]), kind, (v) => { kind = v; });
   kinds.classList.add('segmented');
   const close = sheet(d ? t('Змінити') : t('Новий дрон чи наземка'), h('div', {},
@@ -225,9 +362,11 @@ function droneForm(d = null) {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
-      const rec = d ? { ...d, name: v.name, price: v.price, buyDate: v.buyDate }
+      const [orderId, lineId] = (v.buy || '').split('|');
+      const buy = orderId ? { orderId, lineId } : null;
+      const rec = d ? { ...d, name: v.name, price: v.price, buyDate: v.buyDate, buy }
         : {
-          id: db.uid(), created: Date.now(), name: v.name, kind, group: groupOf(kind), price: v.price, buyDate: v.buyDate,
+          id: db.uid(), created: Date.now(), name: v.name, kind, group: groupOf(kind), price: v.price, buyDate: v.buyDate, buy,
           slots: SLOTS[kind].map(([cat, tpl]) => ({ id: db.uid(), cat, ...(tpl ? { tpl } : {}), itemId: null })),
           notes: [], configs: [], history: [{ date: today(), text: t('Заведено') }],
         };
@@ -240,8 +379,7 @@ function droneForm(d = null) {
 
 function droneDetail(id) {
   const build = () => { const d = findDrone(id); return d ? droneBody(d) : null; };
-  const d = findDrone(id);
-  sheet(d.name, build(), {
+  sheet(() => findDrone(id)?.name, build(), {
     live: build,
     tools: [toolBtn('edit', t('Змінити'), () => droneForm(findDrone(id))), toolBtn('delete', t('Видалити'), () => removeDrone(findDrone(id)), 'danger')],
   });
@@ -249,9 +387,11 @@ function droneDetail(id) {
 
 function droneBody(d) {
   const photo = findPhoto(d.photoId);
+  const b = boughtLine(d);
   return h('div', {},
-    photo ? h('img', { class: 'drone-photo', src: photo.thumb, alt: '', onclick: () => showPhoto(photo.id) }) : null,
-    kv([[t('Тип'), kindLabel(d.kind)], [t('Вартість'), fmt.money(droneCost(d))], [t('Куплено'), d.buyDate ? fmt.date(d.buyDate) : null]]),
+    photo ? h('img', { class: 'drone-photo', src: photo.thumb, alt: '', onclick: () => showPhoto(photo.id, dronePhotos(d)) }) : null,
+    kv([[t('Тип'), kindLabel(d.kind)], [t('Вартість'), fmt.money(droneCost(d))],
+      [t('Куплено'), b ? `${b.o.shop} · ${fmt.date(b.o.date)}` : d.buyDate ? fmt.date(d.buyDate) : null]]),
     box(t('Збірка'), h('div', {},
       h('div', { class: 'rows' }, d.slots.map((s) => slotRow(d, s))),
       h('div', { class: 'btn-row' }, btn(t('+ Слот'), () => slotForm(d))))),
@@ -404,7 +544,7 @@ function noteForm(d) {
 function noteView(d, n) {
   const close = sheet(fmt.date(n.date), h('div', {},
     h('p', { class: 'pre' }, n.text),
-    n.photoId && findPhoto(n.photoId) ? h('img', { class: 'drone-photo', src: findPhoto(n.photoId).thumb, alt: '', onclick: () => showPhoto(n.photoId) }) : null), {
+    n.photoId && findPhoto(n.photoId) ? h('img', { class: 'drone-photo', src: findPhoto(n.photoId).thumb, alt: '', onclick: () => showPhoto(n.photoId, dronePhotos(findDrone(d.id) ?? d)) }) : null), {
     tools: [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити нотатку?'), '', t('Видалити'), async () => {
       close();
       const cur = findDrone(d.id);
@@ -524,8 +664,7 @@ function itemForm(it = null, { preset = {}, onSaved = null } = {}) {
 
 function itemDetail(id) {
   const build = () => { const it = findItem(id); return it ? itemBody(it) : null; };
-  const it = findItem(id);
-  sheet(itemName(it), build(), {
+  sheet(() => itemName(findItem(id)), build(), {
     live: build,
     tools: [toolBtn('edit', t('Змінити'), () => itemForm(findItem(id))), toolBtn('delete', t('Видалити'), () => removeItem(findItem(id)), 'danger')],
   });
@@ -636,7 +775,8 @@ function removeItem(it) {
 
 /**
  * Замовлення: шапка + позиції. Доставка розкидається на позиції пропорційно ціні; ціна деталі на складі —
- * у гривнях за курсом дня покупки. Штучна позиція ×N — N окремих деталей; розхідник — одна з кількістю.
+ * у гривнях за курсом дня покупки. Штучна позиція ×N — N окремих деталей; розхідник — одна з кількістю;
+ * «дрон чи шолом цілим» на склад не йде — його обирають у картці дрона як покупку.
  */
 function orderForm(o = null) {
   const prevLines = o?.lines ?? [];
@@ -661,7 +801,7 @@ function orderForm(o = null) {
   const lineForms = [];
   const addLine = (l = {}) => {
     const lf = form([
-      { name: 'kind', label: t('Вид'), type: 'select', options: [['unit', t('Деталь')], ['consumable', t('Розхідник')]], value: l.kind ?? 'unit', half: true },
+      { name: 'kind', label: t('Вид'), type: 'select', options: [['unit', t('Деталь')], ['consumable', t('Розхідник')], ['drone', t('Дрон чи шолом цілим')]], value: l.kind ?? 'unit', half: true },
       { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(), value: l.cat ?? 'other', half: true },
       { name: 'brand', label: t('Бренд'), value: l.brand, half: true },
       { name: 'model', label: t('Модель'), value: l.model, half: true, required: true },
@@ -703,25 +843,26 @@ function orderForm(o = null) {
 
 /** Зміни для бази: замовлення й деталі його позицій. Кидає помилку, якщо прибрати треба деталь не зі складу. */
 function orderChanges(o, prevLines) {
-  const k = orderK(o);
-  const sub = orderSub(o);
-  const ship = sub ? num(o.shipping) / sub : 0;
   const put = [];
   const del = [];
   const busy = (it) => it.kind === 'unit' && it.status !== 'stock';
   for (const pl of prevLines) {
-    if (o.lines.some((l) => l.id === pl.id)) continue;
+    const l = o.lines.find((x) => x.id === pl.id);
+    if (l && l.kind === (pl.kind ?? 'unit')) continue;
+    // Позицію прибрали чи змінили їй вид (деталь ↔ розхідник ↔ дрон) — старі записи складу йдуть, нові створяться нижче
     for (const it of pl.itemIds.map(findItem).filter(Boolean)) {
       if (busy(it)) throw new Error(t('«{name}» не на складі — позицію не прибрати', { name: itemName(it) }));
       del.push(it.id);
     }
+    if (l) l.itemIds = [];
   }
   const bought = t('Куплено: {shop}', { shop: o.shop });
   for (const l of o.lines) {
-    const prev = prevLines.find((x) => x.id === l.id);
+    if (l.kind === 'drone') { l.itemIds = []; continue; }
+    const prev = prevLines.find((x) => x.id === l.id && (x.kind ?? 'unit') === l.kind);
     const renamed = !prev || prev.brand !== l.brand || prev.model !== l.model || prev.cat !== l.cat;
     const base = { orderId: o.id, buyDate: o.date, ...(renamed ? { cat: l.cat, brand: l.brand, model: l.model } : {}) };
-    const unitUah = round2(l.price * (1 + ship) * k);
+    const unitUah = lineUah(o, l);
     const ids = l.itemIds.filter((id) => findItem(id));
     if (l.kind === 'consumable') {
       const it = findItem(ids[0]);
@@ -799,7 +940,7 @@ function batteryForm(b = null) {
 
 function batteryDetail(id) {
   const build = () => { const b = findBattery(id); return b ? batteryBody(b) : null; };
-  sheet(batTitle(findBattery(id)), build(), {
+  sheet(() => (findBattery(id) ? batTitle(findBattery(id)) : ''), build(), {
     live: build,
     tools: [toolBtn('edit', t('Змінити'), () => batteryForm(findBattery(id))), toolBtn('delete', t('Видалити'), () => {
       const b = findBattery(id);
@@ -1356,7 +1497,7 @@ window.addEventListener('db-blocked', () => toast(t('Закрийте інші �
 registerWorker();
 navigator.storage?.persist?.().catch(() => {});
 try {
-  state = await db.loadAll();
+  await load();
 } catch (err) {
   window.removeEventListener('hashchange', route);
   $('fab').hidden = true;

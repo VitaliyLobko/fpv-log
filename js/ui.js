@@ -151,12 +151,14 @@ export function goTab(hash) {
  * full — на весь екран (картка з великим фото), а не до 92% висоти.
  */
 /** lead — кнопка ліворуч від заголовка, окремо від решти (видалення: щоб не натиснути випадково). */
+/** title — рядок або функція: у живій шторці заголовок перечитується разом із тілом (перейменували — видно одразу). */
 /**
  * dirty — чи є що втратити: тоді фон, ✕, Escape і «Назад» спершу питають (кнопка «Скасувати» закриває одразу).
  * Без dirty шторка з кнопками сама порівнює поля зі знімком при відкритті — питає, лише якщо людина щось змінила;
  * dirty: false — не питати ніколи (фільтр, де закрити = скасувати).
  */
 export function sheet(title, body, { actions = [], onClose, live, tools = [], lead = null, full = false, dirty = null } = {}) {
+  const titleOf = () => (typeof title === 'function' ? title() : title);
   const layer = document.getElementById('layer');
   const opener = document.activeElement;
   let closed = false;
@@ -188,6 +190,8 @@ export function sheet(title, body, { actions = [], onClose, live, tools = [], le
   const rebuild = () => {
     const next = live();
     if (!next) { close(); return; }
+    panel.querySelector('.sheet-head h2').textContent = titleOf();
+    panel.setAttribute('aria-label', titleOf());
     const box = panel.querySelector('.sheet-body');
     const top = box.scrollTop;
     // Фокус (клавіатура, читалка екрана) — на той самий за порядком елемент, інакше він злітає на початок сторінки
@@ -202,11 +206,11 @@ export function sheet(title, body, { actions = [], onClose, live, tools = [], le
   const danger = [tools].flat(Infinity).filter((x) => x?.classList?.contains('danger'));
   const rest = [tools].flat(Infinity).filter((x) => !danger.includes(x));
   const left = [danger, lead].flat(Infinity).filter(Boolean);
-  const panel = h('section', { class: full ? 'sheet full' : 'sheet', role: 'dialog', 'aria-label': title },
+  const panel = h('section', { class: full ? 'sheet full' : 'sheet', role: 'dialog', 'aria-label': titleOf() },
     h('div', { class: 'sheet-grip' }),
     h('header', { class: 'sheet-head' },
       left.length ? h('div', { class: 'sheet-lead' }, left) : null,
-      h('h2', {}, title),
+      h('h2', {}, titleOf()),
       h('div', { class: 'sheet-tools' }, rest,
         h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Закрити'), onclick: ask }, '✕'))),
     h('div', { class: 'sheet-body' }, body),
