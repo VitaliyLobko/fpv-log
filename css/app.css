@@ -1,15 +1,15 @@
 :root {
-  --bg: #101310;
-  --bg-glow: #1b2119;
-  --surface: #191e18;
-  --surface-2: #232a22;
-  --seg-on: #343e32;
-  --line: #2e362d;
-  --line-soft: #262d25;
-  --text: #eaeee5;
-  --muted: #949e90;
-  --accent: #ec7f2f;
-  --accent-2: #f3a05c;
+  --bg: #0e1114;
+  --bg-glow: #161b21;
+  --surface: #151a1f;
+  --surface-2: #1d242b;
+  --seg-on: #2a333c;
+  --line: #27303a;
+  --line-soft: #20272f;
+  --text: #e6edf2;
+  --muted: #8d9aa6;
+  --accent: #22d3ee;
+  --accent-2: #67e8f9;
   --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   /* заливка кнопок і вибраного — окремо від акцентного тексту; у темній це той самий помаранчевий */
   --fill: var(--accent);
@@ -21,7 +21,7 @@
   --warn: #dbad3a;
   --clean: #4fa7cf;
   /* текст на заливці акцентом/купівлею/пострілом: на яскравому помаранчевому білий не читався (2.7:1) */
-  --on-accent: #1c1408;
+  --on-accent: #04161a;
   --radius: 16px;
   --tabs-h: 64px;
   --shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 6px 16px rgb(0 0 0 / .22);
@@ -31,22 +31,22 @@
 /* Тему ставить data-theme на <html>: скрипт у index.html ще до малювання, потім app.js («Ще → Тема»). */
 :root[data-theme="light"] {
   /* без чисто білого й чисто чорного: текст ~14:1, як у темній, а не 16,6:1 — інакше ріже очі */
-  --bg: #f1f2ec;
-  --bg-glow: #e8eae1;
-  --surface: #fcfcf9;
-  --surface-2: #eceee6;
+  --bg: #eef2f4;
+  --bg-glow: #e3e9ec;
+  --surface: #fbfcfd;
+  --surface-2: #e8edf0;
   --seg-on: #ffffff;
-  --line: #dcdfd4;
-  --line-soft: #e7e9e1;
-  --text: #262b23;
-  --muted: #5f675a;
+  --line: #d6dde2;
+  --line-soft: #e3e8eb;
+  --text: #1f272d;
+  --muted: #5a6670;
   /* темний помаранчевий — лише для тексту; кнопки й вибране — яскравий, як у темній, з темним текстом */
-  --accent: #b4570f;
-  --accent-2: #9a490c;
+  --accent: #0e7490;
+  --accent-2: #155e75;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-  --fill: #ec7f2f;
-  --fill-2: #f3a05c;
-  --on-fill: #1c1408;
+  --fill: #22d3ee;
+  --fill-2: #67e8f9;
+  --on-fill: #04161a;
   /* темніші за темну тему: на білому світлі відтінки ледь читались (жовтий — 2:1) */
   --buy: #26803f;
   --shoot: #a5321f;
@@ -54,7 +54,7 @@
   --warn: #7a5600;
   --clean: #2a7fa6;
   --on-accent: #fff;
-  --shadow: 0 1px 2px rgb(30 40 25 / .06), 0 6px 16px rgb(30 40 25 / .06);
+  --shadow: 0 1px 2px rgb(20 35 45 / .06), 0 6px 16px rgb(20 35 45 / .06);
   color-scheme: light;
 }
 
@@ -582,7 +582,7 @@ body:has(#layer .backdrop) .toast:not(.reminder) { bottom: auto; top: calc(env(s
 /* тост завжди темний: помаранчевий текст — сталий світлий, а не з теми */
 /* Нагадування — під шторкою (.backdrop — 20): не закриває її кнопки */
 .toast.reminder { z-index: 19; }
-.toast button { min-height: 44px; margin: -10px -6px -10px 0; border: 0; background: none; color: #f3a05c; font-weight: 800; cursor: pointer; padding: 4px 10px; }
+.toast button { min-height: 44px; margin: -10px -6px -10px 0; border: 0; background: none; color: #67e8f9; font-weight: 800; cursor: pointer; padding: 4px 10px; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 .link-btn { padding: 0; border: 0; background: none; color: var(--accent-2); font: inherit; text-decoration: underline; cursor: pointer; }
