@@ -7,6 +7,7 @@ import { prepare as preparePhoto } from './photos.js';
 import { rateOn, refreshRates } from './usd.js';
 import { parseConfig } from './fcconfig.js';
 import { searchPlace, hourly, kpIndex, verdict, LIMITS } from './weather.js';
+import { repoOf, isNewer, latestTags, refreshLatest } from './releases.js';
 import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
 
 let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
@@ -130,6 +131,16 @@ async function refresh() {
   await load();
   render();
   refreshSheets();
+  checkFw();
+}
+
+// Новіші прошивки — фоном, теги з кешу на добу; мережу смикаємо не частіше раз на 10 хвилин (офлайн — тихо нічого)
+let fwTried = { at: 0, key: '' };
+function checkFw() {
+  const repos = [...new Set(state.items.map((it) => repoOf(it.fw)).filter(Boolean))].sort();
+  if (!repos.length || (repos.join() === fwTried.key && Date.now() - fwTried.at < 600_000)) return;
+  fwTried = { at: Date.now(), key: repos.join() };
+  refreshLatest(repos).then((changed) => { if (changed) { render(); refreshSheets(); } }, () => {});
 }
 
 async function save(changes, ids = []) {
@@ -140,6 +151,9 @@ async function save(changes, ids = []) {
 
 const itemName = (it) => (it ? [it.brand, it.model].filter(Boolean).join(' ') || catLabel(it.cat) : '—');
 const slotLabel = (s) => s.label || (s.tpl ? t(s.tpl) : catLabel(s.cat));
+/** Новіший реліз прошивки деталі (Betaflight, INAV, ExpressLRS, EdgeTX) з кешу GitHub чи null. */
+const fwNewer = (it) => { const tag = it?.fw && latestTags()[repoOf(it.fw)]; return tag && isNewer(tag, it.fw) ? tag : null; };
+const fwHint = (it) => (fwNewer(it) ? t('є новіша: {v}', { v: fwNewer(it) }) : null);
 const prefs = () => state.prefs.find((p) => p.id === 'settings') ?? { id: 'settings' };
 const staleDays = () => num(prefs().staleDays) || 3;
 
@@ -327,7 +341,8 @@ function staleBanner() {
 
 function droneRow(d) {
   const filled = d.slots.filter((s) => s.itemId).length;
-  return row(d.name, [kindLabel(d.kind), t('деталей: {n}', { n: filled })].join(' · '), droneCost(d) ? fmt.money(droneCost(d)) : '',
+  const fresh = d.slots.some((s) => fwNewer(findItem(s.itemId)));
+  return row(d.name, [kindLabel(d.kind), t('деталей: {n}', { n: filled }), fresh ? t('є новіша прошивка') : null].filter(Boolean).join(' · '), droneCost(d) ? fmt.money(droneCost(d)) : '',
     () => droneDetail(d.id), { id: d.id, thumb: thumbImg(d.photoId, monogram(d.name)) });
 }
 
@@ -425,7 +440,7 @@ function slotRow(d, s) {
     h('span', { class: 'row-main', onclick: it ? () => itemDetail(it.id) : null },
       h('span', { class: 'muted small' }, slotLabel(s)),
       h('span', { class: 'row-title' }, it ? itemName(it) : '—'),
-      it?.fw ? h('span', { class: 'muted small' }, `${t('Прошивка')}: ${it.fw}`) : null),
+      it?.fw ? h('span', { class: 'muted small' }, `${t('Прошивка')}: ${it.fw}`, fwHint(it) ? h('span', { class: 'fw-new' }, ` · ${fwHint(it)}`) : null) : null),
     btn(t('Замінити'), () => replaceSheet(d.id, s.id), 'quiet'));
 }
 
@@ -625,7 +640,7 @@ function itemRow(it) {
   if (it.kind === 'consumable') {
     return row(itemName(it), catLabel(it.cat), `${fmt.num(it.qty)} ${t('шт')}`, () => itemDetail(it.id), { id: it.id, cls: isLow(it) ? 'low' : '' });
   }
-  return row(itemName(it), [catLabel(it.cat), it.fw, where].filter(Boolean).join(' · '), it.price ? fmt.money(it.price) : '', () => itemDetail(it.id), { id: it.id });
+  return row(itemName(it), [catLabel(it.cat), it.fw, fwHint(it), where].filter(Boolean).join(' · '), it.price ? fmt.money(it.price) : '', () => itemDetail(it.id), { id: it.id });
 }
 
 // Відбір за дроном у «Хочу» й журналі польотів: «Усі» + дрони, що є в списку; спільний вибір, пам'ятається
@@ -796,7 +811,7 @@ function itemBody(it) {
       drone ? [t('Дрон'), h('button', { type: 'button', class: 'link-btn', onclick: () => droneDetail(drone.id) }, drone.name)] : null,
       it.status === 'broken' ? [t('Причина'), it.reason] : null,
       it.status === 'sold' ? [t('Продано'), `${fmt.money(it.soldPrice)}${it.soldDate ? ` · ${fmt.date(it.soldDate)}` : ''}`] : null,
-      cons ? null : [t('Прошивка'), it.fw],
+      cons ? null : [t('Прошивка'), it.fw ? h('span', {}, it.fw, fwHint(it) ? h('span', { class: 'fw-new' }, ` · ${fwHint(it)}`) : null) : null],
       [t('Ціна'), it.price ? fmt.money(it.price) : null],
       [t('Куплено'), [o?.shop, it.buyDate ? fmt.date(it.buyDate) : null].filter(Boolean).join(' · ')],
       [t('Характеристики'), it.specs ? h('span', { class: 'pre' }, it.specs) : null],
@@ -2052,3 +2067,4 @@ sync.onStatus(renderSyncChip);
 sync.preload();
 sync.syncNow();
 refreshRates(today()).catch(() => {});
+checkFw();
