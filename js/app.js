@@ -1535,6 +1535,47 @@ function backupRow() {
     fileInput]);
 }
 
+/**
+ * Копія у форматі Марнотрата для «Резервна копія → Додати до наявних»: { app: 'marnotrat', coins, ops }.
+ * Монети зливаються за видом і назвою (наявні «Готівка» й «FPV» беруться ті самі, нових — створюються),
+ * операції з уже відомим id пропускаються — id замовлень сталі, тож повторний експорт не дублює.
+ * Витрата = рахунок → категорія, сума — замовлення з доставкою в гривнях (рахунок має бути гривневий).
+ */
+function marnotratFile(orders, accName, catName) {
+  const coin = (id, kind, name, icon, order) => ({ id, kind, name, icon, currency: 'UAH', budget: 0, start: 0, order, archived: false });
+  const acc = coin('fpv-log-account', 'account', accName, 'wallet', 0);
+  const cat = coin('fpv-log-category', 'expense', catName, 'plane', 1);
+  const ops = orders.map((o, i) => ({
+    id: `fpv-log-${o.id}`, from: acc.id, to: cat.id, amount: orderTotal(o), date: o.date, tags: [],
+    comment: `${o.shop}: ${o.lines.map((l) => [l.brand, l.model].filter(Boolean).join(' ')).join(', ')}`.slice(0, 200), created: Date.now() + i,
+  }));
+  return { app: 'marnotrat', version: `fpv-log ${self.APP_VERSION}`, exported: new Date().toISOString(), coins: [acc, cat], ops };
+}
+
+function marnotratRow() {
+  const f = form([
+    { name: 'from', label: t('Від'), type: 'dmy', value: `${today().slice(0, 4)}-01-01`, required: true, half: true },
+    { name: 'to', label: t('До'), type: 'dmy', value: today(), required: true, half: true },
+    { name: 'acc', label: t('Рахунок у Марнотраті'), value: recall('fpv-log:mn-acc') || 'Готівка', required: true, half: true },
+    { name: 'cat', label: t('Категорія'), value: recall('fpv-log:mn-cat') || 'FPV', required: true, half: true },
+  ]);
+  return setRow('marnotrat', 'share', t('Експорт у Марнотрат'), '', [
+    h('p', { class: 'muted small' }, t('Замовлення за період (з доставкою, у гривнях) — витратами з рахунку в категорію. У Марнотраті: Резервна копія → файл → «Додати до наявних»; повторний імпорт не дублює.')),
+    f.el,
+    h('div', { class: 'btn-row' }, btn(t('Зберегти файл'), async () => {
+      if (invalidField(f)) return;
+      const v = f.values();
+      const list = state.orders.filter((o) => o.date >= v.from && o.date <= v.to && orderTotal(o) > 0).sort((a, b) => collate(a.date, b.date));
+      if (!list.length) { toast(t('За цей період замовлень немає')); return; }
+      remember('fpv-log:mn-acc', v.acc);
+      remember('fpv-log:mn-cat', v.cat);
+      const file = JSON.stringify(marnotratFile(list, v.acc, v.cat), null, 1);
+      if (await offerFile(`marnotrat-fpv-${v.from}-${v.to}.json`, file, 'application/json')) {
+        toast(t('Замовлень: {n}, разом {sum}', { n: list.length, sum: fmt.money(list.reduce((s, o) => s + orderTotal(o), 0)) }));
+      }
+    }, 'primary'))]);
+}
+
 function demoRow() {
   return setRow('demo', 'play', t('Демодані'), '', [
     h('p', { class: 'muted small' }, t('Вигаданий 5″ самозбір на Walksnail з історією заміни мотора й прошивок, BNF Meteor75 із замовлення, шолом Cobra X, батареї й десять польотів.')),
@@ -1613,7 +1654,7 @@ function renderSettings() {
   $('subtitle').textContent = t('версія {v}', { v: self.APP_VERSION });
   return h('div', { class: 'settings' },
     settingsGroup(t('Про застосунок'), [aboutPanel()]),
-    settingsGroup(t('Дані'), [syncRow(), backupRow(), demoRow(), wipeRow()]),
+    settingsGroup(t('Дані'), [syncRow(), backupRow(), marnotratRow(), demoRow(), wipeRow()]),
     settingsGroup(t('Вигляд'), [langRow(), themeRow(), backdropRow()]),
     settingsGroup(t('Батареї'), [staleRow()]));
 }
