@@ -696,6 +696,19 @@ pre.config { max-height: 60vh; overflow: auto; padding: 10px; border-radius: 10p
   linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,
   linear-gradient(color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px) 0 0 / 20px 20px,
   linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px) 0 0 / 20px 20px, var(--bg); }
+/* «З акцентом»: тонкі плавні лінії — нейтральні й кілька кольору акценту. Малюнок — лише маска (lines*.svg),
+   колір дає тема, тож бірюзовий, лаймовий і темно-бірюзовий кожен свій. Шари — під усім вмістом */
+:root:is([data-bg="acc-lines"], [data-bg="l-acc-lines"]) { --paper: radial-gradient(120% 60% at 50% -10%, var(--bg-glow), var(--bg) 60%) var(--bg); }
+:root:is([data-bg="acc-lines"], [data-bg="l-acc-lines"]) body::before,
+:root:is([data-bg="acc-lines"], [data-bg="l-acc-lines"]) body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  -webkit-mask: url(lines.svg) center / cover no-repeat; mask: url(lines.svg) center / cover no-repeat;
+  background: color-mix(in srgb, var(--text) 11%, transparent);
+}
+:root:is([data-bg="acc-lines"], [data-bg="l-acc-lines"]) body::after {
+  -webkit-mask-image: url(lines-acc.svg); mask-image: url(lines-acc.svg);
+  background: color-mix(in srgb, var(--accent) 42%, transparent);
+}
 [data-bg="l-map"] { --paper: linear-gradient(rgb(255 255 255 / .35) 0 0), url(topo-light.svg) center / cover no-repeat, var(--bg); }
 [data-bg="l-grid"] { --paper: linear-gradient(color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,
   linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,

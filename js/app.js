@@ -1289,8 +1289,8 @@ function nightLevel() {
 
 // Фон під картками: темний набір — для «Темної» й «Лайму» (спільний вибір), світлий — для «Світлої», у спецрежимах немає
 const BACKDROPS = {
-  dark: [['plain', 'Без малюнка'], ['carbon', 'Карбон'], ['map', 'Карта'], ['grid', 'Сітка OSD']],
-  light: [['l-plain', 'Без малюнка'], ['l-map', 'Карта'], ['l-grid', 'Сітка OSD']],
+  dark: [['plain', 'Без малюнка'], ['carbon', 'Карбон'], ['map', 'Карта'], ['grid', 'Сітка OSD'], ['acc-lines', 'З акцентом']],
+  light: [['l-plain', 'Без малюнка'], ['l-map', 'Карта'], ['l-grid', 'Сітка OSD'], ['l-acc-lines', 'З акцентом']],
 };
 const bgFamily = (theme) => (theme === 'light' ? 'light' : theme === 'dark' || theme === 'lime' ? 'dark' : null);
 const BG_KEY = { dark: 'fpv-log:bg', light: 'fpv-log:bg-light' };
