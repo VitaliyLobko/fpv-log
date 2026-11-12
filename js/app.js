@@ -8,7 +8,7 @@ import { rateOn, refreshRates } from './usd.js';
 import { parseConfig } from './fcconfig.js';
 import { searchPlace, hourly, kpIndex, verdict, LIMITS } from './weather.js';
 import { repoOf, isNewer, latestTags, refreshLatest } from './releases.js';
-import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
+import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, icon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
 
 let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
 let tab = 'drones';
@@ -80,6 +80,21 @@ function fold(key, title, body) {
   const el = h('details', { class: 'ex-more', open: recall(`fpv-log:open:${key}`) === '1' }, h('summary', {}, title), body);
   el.addEventListener('toggle', () => remember(`fpv-log:open:${key}`, el.open ? '1' : ''));
   return el;
+}
+
+/**
+ * Сегменти зі значками: на вузькому екрані (< 480px) — лише значок (підпис — в aria-label і title),
+ * у вибраного — значок і підпис; ширше — значок і підпис у всіх. icons — { значення: назва значка }.
+ */
+function segIcons(seg, icons) {
+  seg.classList.add('seg-ico');
+  for (const b of seg.querySelectorAll('button')) {
+    const label = b.textContent;
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    b.replaceChildren(icon(icons[b.dataset.value]), h('span', { class: 'seg-label' }, label));
+  }
+  return seg;
 }
 
 function empty(title, text, actions = []) {
@@ -592,7 +607,7 @@ function replaceSheet(droneId, slotId, preset = {}) {
   const close = sheet(`${t('Замінити')}: ${slotLabel(s)}`, h('div', {},
     cur ? kv([[t('Зараз'), itemName(cur)]]) : null,
     h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('Нова деталь')), select),
-    h('div', { class: 'btn-row' }, btn(t('Нова деталь, якої ще немає на складі…'), () => {
+    h('div', { class: 'btn-row' }, btn(t('+ Нова деталь'), () => {
       close();
       itemForm(null, { preset: { cat: s.cat }, onSaved: (it) => replaceSlot(droneId, slotId, it.id, 'stock', '') });
     }, 'quiet')),
@@ -767,6 +782,7 @@ const byDroneFilter = (list) => list.filter((x) => !droneFilter || !list.some((y
 function renderStock() {
   const seg = chips(STOCK_SEGS.map(([k, l]) => [k, t(l)]), stockSeg, (v) => { stockSeg = v; remember('fpv-log:stock-seg', v); render(); });
   seg.classList.add('segmented', 'seg-fit');
+  segIcons(seg, { units: 'chip', cons: 'prop', orders: 'receipt', wish: 'heart' });
   const byName = (a, b) => collate(catLabel(a.cat), catLabel(b.cat)) || collate(itemName(a), itemName(b));
   let body;
   if (stockSeg === 'orders') {
@@ -1307,7 +1323,7 @@ function cycleSheet(b) {
     { name: 'ir', label: t('IR по банках, мОм'), placeholder: '4, 4, 5, 4', half: true },
   ]);
   const st = chips(BAT_STATES.slice(0, 3).map(([k, l]) => [k, t(l)]), after, (v) => { after = v; });
-  st.classList.add('segmented');
+  st.classList.add('segmented', 'bat-states');
   const close = sheet(`${t('+ цикл')} · #${b.num}`, h('div', {}, f.el, h('div', { class: 'field-label' }, t('Стан після')), st), {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
@@ -1332,6 +1348,7 @@ function renderFlights() {
   const segs = list.length ? FLIGHT_SEGS : FLIGHT_SEGS.filter(([k]) => k !== 'stats');
   const seg = chips(segs.map(([k, l]) => [k, t(l)]), segs.some(([k]) => k === flightSeg) ? flightSeg : 'log', (v) => { flightSeg = v; remember('fpv-log:flight-seg', v); render(); });
   seg.classList.add('segmented', 'seg-fit');
+  segIcons(seg, { log: 'list', stats: 'chart', pre: 'wind' });
   if (flightSeg === 'pre') return h('div', {}, staleBanner(), seg, renderPreflight());
   if (!list.length) {
     return h('div', {}, staleBanner(), seg, empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
@@ -1535,7 +1552,7 @@ function flightForm(f = null) {
   const addBat = (x = {}) => {
     const used = batForms.map((e) => e.f.values().batteryId);
     const bf = form([
-      { name: 'batteryId', label: t('Батарея'), type: 'select', half: true, options: [['', t('Без номера')], ...usable.map((b) => [b.id, batTitle(b)])],
+      { name: 'batteryId', label: t('Батарея'), type: 'select', options: [['', t('Без номера')], ...usable.map((b) => [b.id, batTitle(b)])],
         value: x.batteryId !== undefined ? x.batteryId ?? '' : usable.find((b) => !used.includes(b.id))?.id ?? '' },
       { name: 'min', label: t('Хвилин'), type: 'number', value: x.min, half: true, required: true },
     ]);

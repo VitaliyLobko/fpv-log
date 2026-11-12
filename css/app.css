@@ -784,3 +784,32 @@ span.ir-max::before { background: var(--warn); }
 .photo-pick-icons { display: flex; gap: 8px; }
 .specs-find { grid-column: 1 / -1; display: flex; margin: -4px 0 4px; }
 .row img.thumb { cursor: zoom-in; }
+
+/* ---- телефон (крок 8): нічого не обрізається й не налазить ---- */
+/* Сегменти зі значками: < 480px — лише значок, у вибраного — значок і підпис */
+.chips.segmented.seg-ico button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.seg-ico .ico { display: grid; flex: none; }
+.seg-ico .ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.seg-ico .seg-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 479px) {
+  .chips.segmented.seg-ico button { padding-inline: 10px; }
+  .seg-ico button:not(.on) .seg-label { display: none; }
+}
+/* Стан батареї — чотири довгі назви: на телефоні сіткою 2×2, текст цілий */
+@media (max-width: 479px) {
+  .chips.segmented.bat-states { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+}
+.chips.segmented.bat-states button { white-space: normal; line-height: 1.15; }
+/* Багато варіантів у ⚙ (фон, тема): переносяться рядами, а не стискаються до «…» */
+.set-pane .chips.segmented { grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+.set-pane .chips.segmented button { white-space: normal; line-height: 1.15; }
+/* Смуги статистики: назва дрона ширша */
+.bar-row { grid-template-columns: minmax(0, 9.5em) 1fr auto; }
+.bar-val { min-width: 4.5em; }
+/* Назва рядка ⚙ переноситься, а не «Резервна коп…» */
+.set-title { white-space: normal; line-height: 1.2; }
+/* Під 380px половинні поля — одне під одним: інакше вибір батареї й модель обрізані */
+@media (max-width: 379px) {
+  .form { grid-template-columns: 1fr; }
+  .field.half { grid-column: 1 / -1; }
+}
