@@ -754,3 +754,14 @@ span.ir-max::before { background: var(--warn); }
 .ir-cell { display: flex; flex-direction: column; align-items: center; min-width: 40px; padding: 4px 8px; border-radius: 10px; background: var(--surface-2); font-weight: 700; font-variant-numeric: tabular-nums; }
 .ir-cell small { font-weight: 500; color: var(--muted); }
 .ir-cell.bad { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+
+/* Перед польотом: вердикт кольором, погодинна таблиця */
+.pre-place .btn-row { margin-top: 6px; }
+.verdict { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid; }
+.verdict b { font-size: 18px; }
+.verdict.green { border-color: var(--buy); background: color-mix(in srgb, var(--buy) 16%, var(--surface)); }
+.verdict.yellow { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, var(--surface)); }
+.verdict.red { border-color: var(--shoot); background: color-mix(in srgb, var(--shoot) 18%, var(--surface)); }
+.wx { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px 4px; padding: 10px; border-radius: 12px; background: var(--surface-2);
+  font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; }
+.wx b { font-size: 10.5px; font-weight: 600; color: var(--muted); }

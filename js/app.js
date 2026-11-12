@@ -6,6 +6,7 @@ import { t, lang, setLang, LANGS, collate, applyStatic, locale } from './i18n.js
 import { prepare as preparePhoto } from './photos.js';
 import { rateOn, refreshRates } from './usd.js';
 import { parseConfig } from './fcconfig.js';
+import { searchPlace, hourly, kpIndex, verdict, LIMITS } from './weather.js';
 import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
 
 let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
@@ -1179,17 +1180,20 @@ function cycleSheet(b) {
 const flightMin = (f) => (f.bats ?? []).reduce((n, x) => n + num(x.min), 0);
 const batLabel = (id) => { const b = findBattery(id); return b ? `#${b.num}` : '—'; };
 
-const FLIGHT_SEGS = [['log', 'Журнал'], ['stats', 'Статистика']];
-let flightSeg = recall('fpv-log:flight-seg') === 'stats' ? 'stats' : 'log';
+const FLIGHT_SEGS = [['log', 'Журнал'], ['stats', 'Статистика'], ['pre', 'Перед польотом']];
+let flightSeg = FLIGHT_SEGS.some(([k]) => k === recall('fpv-log:flight-seg')) ? recall('fpv-log:flight-seg') : 'log';
 
 function renderFlights() {
   const list = [...state.flights].sort((a, b) => collate(b.date, a.date) || num(b.created) - num(a.created));
+  // Порожній журнал — без статистики, але «Перед польотом» потрібне й до першого польоту
+  const segs = list.length ? FLIGHT_SEGS : FLIGHT_SEGS.filter(([k]) => k !== 'stats');
+  const seg = chips(segs.map(([k, l]) => [k, t(l)]), segs.some(([k]) => k === flightSeg) ? flightSeg : 'log', (v) => { flightSeg = v; remember('fpv-log:flight-seg', v); render(); });
+  seg.classList.add('segmented');
+  if (flightSeg === 'pre') return h('div', {}, staleBanner(), seg, renderPreflight());
   if (!list.length) {
-    return h('div', {}, staleBanner(), empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
+    return h('div', {}, staleBanner(), seg, empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
       state.drones.length ? [btn(t('Додати'), () => flightForm(), 'primary add')] : []));
   }
-  const seg = chips(FLIGHT_SEGS.map(([k, l]) => [k, t(l)]), flightSeg, (v) => { flightSeg = v; remember('fpv-log:flight-seg', v); render(); });
-  seg.classList.add('segmented');
   return h('div', {}, staleBanner(), seg, flightSeg === 'stats' ? renderStats() : h('div', {}, droneFilterChips(list), h('div', { class: 'rows' }, byDroneFilter(list).map((f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
       [fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' '), f.crash ? `${t('падіння')}${f.broke ? `: ${f.broke}` : ''}` : ''].filter(Boolean).join(' · '),
       fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' })))));
@@ -1233,6 +1237,136 @@ function renderStats() {
     h('p', { class: 'muted small' }, t('Хвилина польоту — «Вкладено в хобі» ({sum}), поділене на хвилини нальоту.', { sum: fmt.money(invested()) })),
     box(t('Наліт за місяцями'), bars(months, fmtMin)),
     box(t('Наліт за дронами'), bars(byDrone, fmtMin)));
+}
+
+// ---------- перед польотом ----------
+
+// Місце, останній прогноз і галочки — на пристрої (localStorage): погода в кожного своя, галочки — на сьогодні.
+// Сам чекліст — у prefs, їде з Диском.
+const PRE_PLACE = 'fpv-log:pre-place';
+const PRE_CACHE = 'fpv-log:pre-cache';
+const PRE_TICKS = 'fpv-log:pre-ticks';
+const CHECKLIST = ['Пропелери затягнуті', 'GPS: є фікс, Rescue налаштовано', 'Напруга батарей', 'Failsafe перевірено', 'VTX: потужність і канал', 'Зона вільна, людей немає'];
+const readJson = (key) => { try { return JSON.parse(recall(key)) ?? null; } catch { return null; } };
+const placeKey = (p) => `${p.lat.toFixed(2)},${p.lon.toFixed(2)}`;
+const checklist = () => prefs().checklist ?? CHECKLIST.map((x) => t(x));
+let preLoading = false;
+let preTried = 0;
+
+/** Погода й Kp для місця → кеш; Kp не прийшов — лишається попередній. Інтерфейс не чекає: перемальовує, коли готово. */
+async function loadWeather(place) {
+  if (preLoading) return;
+  preLoading = true;
+  preTried = Date.now();
+  try {
+    const [w, k] = await Promise.allSettled([hourly(place), kpIndex()]);
+    if (w.status === 'rejected') throw w.reason;
+    remember(PRE_CACHE, JSON.stringify({ key: placeKey(place), at: Date.now(), hours: w.value, kp: k.value ?? readJson(PRE_CACHE)?.kp ?? null }));
+  } catch {
+    toast(t('Погода не оновилась — перевірте інтернет'));
+  } finally {
+    preLoading = false;
+  }
+  if (tab === 'flights' && flightSeg === 'pre') render();
+}
+
+function setPlace(p) {
+  remember(PRE_PLACE, JSON.stringify(p));
+  preTried = 0;
+  loadWeather(p);
+  render();
+}
+
+function locate() {
+  if (!navigator.geolocation) { toast(t('Геолокація недоступна — виберіть місце вручну')); return; }
+  toast(t('Визначаю місце…'));
+  navigator.geolocation.getCurrentPosition(
+    (pos) => setPlace({ label: t('Моє місце ({lat}, {lon})', { lat: pos.coords.latitude.toFixed(2), lon: pos.coords.longitude.toFixed(2) }), lat: pos.coords.latitude, lon: pos.coords.longitude }),
+    () => toast(t('Не вдалося визначити місце — виберіть вручну')), { timeout: 15000, maximumAge: 600_000 });
+}
+
+function placeSheet() {
+  const last = [...state.flights].sort((a, b) => collate(b.date, a.date))[0]?.place;
+  const f = form([{ name: 'name', label: t('Місце'), placeholder: t('Назва села чи міста'), value: last }]);
+  const found = h('div', { class: 'chips' });
+  const close = sheet(t('Місце для погоди'), h('div', {}, f.el, found), {
+    actions: [btn(t('Скасувати'), () => close()), btn(t('Знайти'), async () => {
+      const name = String(f.values().name ?? '').trim();
+      if (name.length < 2) { fieldError(f.inputs.name, t('Введіть назву')); return; }
+      try {
+        const list = await searchPlace(name, lang());
+        if (!list.length) { fieldError(f.inputs.name, t('Нічого не знайдено — спробуйте інакше написати')); return; }
+        found.replaceChildren(...list.map((p) => h('button', { type: 'button', onclick: () => { close(); setPlace(p); } }, p.label)));
+      } catch {
+        toast(t('Не вдалося знайти місце — перевірте інтернет'));
+      }
+    }, 'primary')],
+  });
+}
+
+function checklistSheet() {
+  const f = form([{ name: 'list', label: t('Пункти — по одному в рядку'), type: 'textarea', rows: 8, value: checklist().join('\n') }]);
+  const close = sheet(t('Чекліст'), f.el, {
+    actions: [btn(t('Типовий'), async () => { close(); await save({ prefs: { put: [{ ...prefs(), checklist: null }] } }); }),
+      btn(t('Зберегти'), async () => {
+        const list = String(f.values().list ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
+        close();
+        await save({ prefs: { put: [{ ...prefs(), checklist: list.length ? list : null }] } });
+      }, 'primary')],
+  });
+}
+
+/** «Перед польотом»: вердикт за вітром, поривами, опадами, морозом і Kp на 3 години, погодинна таблиця й чекліст. */
+function renderPreflight() {
+  const place = readJson(PRE_PLACE);
+  const cache = readJson(PRE_CACHE);
+  const mine = place && cache?.key === placeKey(place) ? cache : null;
+  // Старіше 20 хвилин — оновити, але не частіше раз на 5 хвилин: офлайн не смикає мережу з кожним перемальовуванням
+  if (place && (!mine || Date.now() - mine.at > 1_200_000) && Date.now() - preTried > 300_000) loadWeather(place);
+  const ms = (v) => fmt.num(Math.round(v * 10) / 10);
+  const head = h('div', { class: 'pre-place' },
+    h('span', { class: 'row-title' }, place ? place.label : t('Місце не вибрано')),
+    h('div', { class: 'btn-row' }, btn(t('Моє місце'), locate), btn(t('Інше місце'), placeSheet),
+      place ? btn(preLoading ? t('Оновлюю…') : t('Оновити'), () => { preTried = 0; loadWeather(place); render(); }, 'quiet') : null));
+  let weather;
+  if (mine?.hours.length) {
+    const v = verdict(mine.hours, mine.kp?.kp ?? null);
+    const WHY = { вітер: t('вітер {v} м/с'), пориви: t('пориви {v} м/с'), опади: t('опади {v} мм/год'), Kp: 'Kp {v}', мороз: t('мороз {v} °C') };
+    const kp = mine.kp?.kp;
+    const kpState = kp >= LIMITS.kp[1] ? t('магнітна буря, GPS і компас можуть брехати') : kp >= LIMITS.kp[0] ? t('збурення') : t('спокійно');
+    weather = h('div', {},
+      h('div', { class: `verdict ${v.level}` },
+        h('b', {}, { green: t('Можна літати'), yellow: t('Обережно'), red: t('Краще не літати') }[v.level]),
+        h('span', {}, v.why.length ? v.why.map(([k, x]) => WHY[k].replace('{v}', ms(x))).join(' · ') : t('Найближчі 3 години — у межах порогів'))),
+      h('div', { class: 'wx' },
+        [t('Час'), '°C', t('10 м'), t('80 м'), t('120 м'), t('Пориви'), t('Опади')].map((x) => h('b', {}, x)),
+        mine.hours.flatMap((x) => [x.time.slice(11, 16), ms(x.t), ms(x.w10), ms(x.w80), ms(x.w120), ms(x.g), x.p ? ms(x.p) : x.pp ? `${x.pp}%` : '—'].map((c) => h('span', {}, c)))),
+      h('p', { class: 'muted small' }, [
+        t('Вітер і пориви — м/с, опади — мм/год (або ймовірність).'),
+        kp === undefined ? t('Kp недоступний.') : t('Kp {kp} — {state} (NOAA, {at} UTC).', { kp: ms(kp), state: kpState, at: String(mine.kp.at).slice(11, 16) }),
+        t('Оновлено {time}.', { time: shortWhen(mine.at) })].join(' ')),
+      h('p', { class: 'muted small' }, t('Пороги на найближчі 3 години (жовтий / червоний): вітер на 10 м {w} м/с, пориви {g} м/с, опади {r} мм/год, Kp {k}; мороз — жовтий (LiPo гріти).',
+        { w: LIMITS.wind.join(' / '), g: LIMITS.gust.join(' / '), r: LIMITS.rain.map(fmt.num).join(' / '), k: LIMITS.kp.join(' / ') })));
+  } else {
+    weather = h('p', { class: 'muted' }, !place ? t('Виберіть місце — з телефона чи назвою: буде вітер на висотах, пориви, опади й Kp.')
+      : preLoading ? t('Завантажую погоду…') : t('Погоди ще немає — потрібен інтернет.'));
+  }
+  const ticks = readJson(PRE_TICKS);
+  const done = new Set(ticks?.date === today() ? ticks.done : []);
+  const items = checklist();
+  const count = h('span', {});
+  const recount = () => { count.textContent = ` · ${items.filter((x) => done.has(x)).length} / ${items.length}`; };
+  recount();
+  return h('div', {}, head, weather,
+    box([t('Чекліст'), count], h('div', {}, items.map((x) => h('label', { class: 'check' },
+      h('input', {
+        type: 'checkbox', checked: done.has(x), onchange: (e) => {
+          if (e.target.checked) done.add(x); else done.delete(x);
+          remember(PRE_TICKS, JSON.stringify({ date: today(), done: [...done] }));
+          recount();
+        },
+      }), h('span', {}, x))),
+    h('p', { class: 'muted small' }, t('Галочки скидаються щодня.')), h('div', { class: 'btn-row' }, btn(t('Змінити чекліст'), checklistSheet, 'quiet')))));
 }
 
 /** Політ: батареї з хвилинами; кожна отримує цикл (cycles[].flightId), наліт дрона рахується з польотів. */
