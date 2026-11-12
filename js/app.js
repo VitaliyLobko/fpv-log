@@ -5,6 +5,7 @@ import * as sync from './sync.js';
 import { t, lang, setLang, LANGS, collate, applyStatic, locale } from './i18n.js';
 import { prepare as preparePhoto } from './photos.js';
 import { rateOn, refreshRates } from './usd.js';
+import { parseConfig } from './fcconfig.js';
 import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
 
 let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
@@ -409,7 +410,7 @@ function droneBody(d) {
     d.notes?.length ? box(t('Нотатки'), h('div', { class: 'rows' }, [...d.notes].sort((a, b) => collate(b.date, a.date)).map((n) =>
       row(n.text.split('\n')[0], fmt.date(n.date), '', () => noteView(d, n), { thumb: n.photoId ? thumbImg(n.photoId) : null })))) : null,
     d.configs?.length ? box(t('Конфіги'), h('div', { class: 'rows' }, [...d.configs].sort((a, b) => collate(b.date, a.date)).map((c) =>
-      row(c.name || t('Конфіг'), fmt.date(c.date), '', () => configView(d, c))))) : null,
+      row(c.name || t('Конфіг'), [fmt.date(c.date), parseConfig(c.text)?.label].filter(Boolean).join(' · '), '', () => configView(d, c))))) : null,
     d.history?.length ? fold('drone-history', t('Історія'), historyList(d.history)) : null);
 }
 
@@ -572,14 +573,35 @@ function configForm(d) {
       const v = f.values();
       close();
       const cur = findDrone(d.id);
-      await save({ drones: { put: [{ ...cur, configs: [...(cur.configs ?? []), { id: db.uid(), ...v }] }] } }, [d.id]);
+      const c = { id: db.uid(), ...v };
+      await save({ drones: { put: [{ ...cur, configs: [...(cur.configs ?? []), c] }] } }, [d.id]);
+      // Одразу підсумок розбору: звідти — оновити прошивку польотника
+      if (parseConfig(c.text)) configView(findDrone(d.id), c);
     }, 'primary')],
   });
 }
 
+/** Деталь у слоті польотника: FC, AIO чи стек (у самозборі стек часто стоїть у слоті регулятора). */
+function fcItem(d) {
+  const FC = ['fc', 'aio', 'stack'];
+  return d.slots.map((s) => findItem(s.itemId)).find((it, i) => it && (FC.includes(d.slots[i].cat) || FC.includes(it.cat))) ?? null;
+}
+
 function configView(d, c) {
+  const p = parseConfig(c.text);
+  const fc = p?.label ? fcItem(d) : null;
   const close = sheet(c.name || t('Конфіг'), h('div', {},
     h('p', { class: 'muted small' }, fmt.date(c.date)),
+    p ? box(t('З конфігу'), h('div', {},
+      kv([[t('Прошивка'), p.label], [t('Ціль'), p.target], [t('Плата'), p.board], [t('Ім’я (craft_name)'), p.craft],
+        [t('Приймач'), p.rx], [t('Протокол моторів'), p.motor], ['GPS', p.gps]]),
+      fc && fc.fw !== p.label ? h('p', { class: 'muted small' }, t('У «{name}» записано: {fw}', { name: itemName(fc), fw: fc.fw || '—' })) : null,
+      h('div', { class: 'btn-row' },
+        fc && fc.fw !== p.label ? btn(t('Оновити прошивку польотника'), () => { close(); fwSheet(fc, p.label); }, 'primary') : null,
+        p.craft && p.craft !== d.name ? btn(t('Назвати дрон «{name}»', { name: p.craft }), async () => {
+          close();
+          await save({ drones: { put: [logged({ ...findDrone(d.id), name: p.craft }, t('Перейменовано: {from} → {to}', { from: d.name, to: p.craft }))] } }, [d.id]);
+        }) : null))) : null,
     h('pre', { class: 'config' }, c.text)), {
     actions: [btn(t('Скопіювати'), () => copyText(c.text), 'primary')],
     tools: [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити конфіг?'), '', t('Видалити'), async () => {
@@ -815,9 +837,9 @@ function soldSheet(it) {
   });
 }
 
-function fwSheet(it) {
+function fwSheet(it, to = it.fw) {
   const f = form([
-    { name: 'to', label: t('Нова версія'), value: it.fw, required: true },
+    { name: 'to', label: t('Нова версія'), value: to, required: true },
     { name: 'date', label: t('Дата'), type: 'dmy', value: today(), required: true },
   ]);
   const close = sheet(t('Прошивка'), f.el, {

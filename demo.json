@@ -111,6 +111,12 @@
       "name": "Betaflight 4.5.1 · diff all",
       "date": "2025-03-20",
       "text": "# diff all\n# Betaflight / STM32F405 (S405) 4.5.1\nboard_name SPEEDYBEEF405V4\n\nfeature GPS\nserial 1 2 115200 57600 0 115200\nset motor_pwm_protocol = DSHOT600\nset gps_provider = UBLOX\n\nprofile 0\nset p_pitch = 52\nset d_pitch = 44\n\nrateprofile 0\nset roll_rc_rate = 100\nset pitch_rc_rate = 100\n"
+     },
+     {
+      "id": "demo-c2",
+      "name": "Betaflight 4.5.2 · diff all",
+      "date": "2025-10-01",
+      "text": "# diff all\n\n# version\n# Betaflight / STM32F405 (S405) 4.5.2 Feb 11 2025 / 09:15:40 (024f8e13d) MSP API: 1.46\n\n# start the command batch\nbatch start\n\nboard_name SPEEDYBEEF405V4\nmanufacturer_id SPBE\n\n# feature\nfeature GPS\n\n# serial\nserial 1 2 115200 57600 0 115200\nserial 2 64 115200 57600 0 115200\n\n# master\nset gps_provider = UBLOX\nset gps_rescue_min_sats = 7\nset motor_pwm_protocol = DSHOT600\nset serialrx_provider = CRSF\nset craft_name = KESTREL\n\nprofile 0\nset p_pitch = 52\nset d_pitch = 44\n\nrateprofile 0\nset roll_rc_rate = 100\nset pitch_rc_rate = 100\n\nbatch end\n"
      }
     ],
     "history": [
