@@ -87,10 +87,14 @@ function box(title, content, tools = null) {
   return h('fieldset', { class: 'box' }, h('legend', {}, title, tools), content);
 }
 
-/** Група, що згортається; розгорнуту пам'ятає між запусками. */
-function fold(key, title, body) {
-  const el = h('details', { class: 'ex-more', open: recall(`fpv-log:open:${key}`) === '1' }, h('summary', {}, title), body);
-  el.addEventListener('toggle', () => remember(`fpv-log:open:${key}`, el.open ? '1' : ''));
+/**
+ * Група, що згортається; стан пам'ятає між запусками. open — як показати вперше, cls — 'group' для груп списку на екрані.
+ * Заголовок — з лічильником чи головним значенням: і згорнута група розповідає, що в ній.
+ */
+function fold(key, title, body, { open = false, cls = '' } = {}) {
+  const v = recall(`fpv-log:open:${key}`);
+  const el = h('details', { class: `ex-more ${cls}`, open: v === null ? open : v === '1' }, h('summary', {}, title), body);
+  el.addEventListener('toggle', () => remember(`fpv-log:open:${key}`, el.open ? '1' : '0'));
   return el;
 }
 
@@ -290,7 +294,7 @@ const photoBtn = (src, onclick) => h('button', { type: 'button', class: 'photo-b
 function thumbImg(photoId, fallback = '') {
   const p = findPhoto(photoId);
   if (p) return h('img', { class: 'thumb', src: p.thumb, alt: t('Фото'), onclick: (e) => { e.stopPropagation(); showPhoto(p.id); } });
-  return fallback === null ? null : h('span', { class: 'thumb mono', style: '--h: 25' }, fallback);
+  return fallback === null ? null : h('span', { class: 'thumb mono', style: `--h: ${hue(fallback)}` }, fallback);
 }
 
 // «Знайти фото»: перед переходом у Google запам'ятовуємо форму, куди повернути картинку з «Поділитися»
@@ -473,6 +477,8 @@ function showPhoto(id, ids = [id]) {
 /** Усі фото дрона по порядку: сам дрон, далі нотатки від нових до старих. */
 const dronePhotos = (d) => [d.photoId, ...[...(d.notes ?? [])].sort((a, b) => collate(b.date, a.date)).map((n) => n.photoId)].filter(Boolean);
 
+/** Відтінок плитки з назви: у кожного дрона свій, але завжди той самий. */
+const hue = (s) => [...String(s)].reduce((n, c) => (n * 31 + c.codePointAt(0)) % 360, 7);
 const monogram = (name) => String(name ?? '').split(/[\s-]+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase() || '?';
 
 // ---------- плашка батарей ----------
@@ -494,7 +500,7 @@ function staleBanner() {
 function droneRow(d) {
   const filled = d.slots.filter((s) => s.itemId).length;
   const fresh = d.slots.some((s) => fwNewer(findItem(s.itemId)));
-  return row(d.name, [kindLabel(d.kind), t('деталей: {n}', { n: filled }), fresh ? t('є новіша прошивка') : null].filter(Boolean).join(' · '), droneCost(d) ? fmt.money(droneCost(d)) : '',
+  return row(d.name, [kindLabel(d.kind), t('деталей: {n}', { n: filled }), fresh ? t('є новіша прошивка') : null].filter(Boolean).join(' · '), droneCost(d) ? fmt.uah(droneCost(d)) : '',
     () => droneDetail(d.id), { id: d.id, thumb: thumbImg(d.photoId, monogram(d.name)) });
 }
 
@@ -502,8 +508,8 @@ function renderDrones() {
   const drones = state.drones.filter((d) => d.group !== 'ground').sort((a, b) => collate(a.name, b.name));
   const ground = state.drones.filter((d) => d.group === 'ground').sort((a, b) => collate(a.name, b.name));
   if (!state.drones.length) {
-    return h('div', {}, staleBanner(), empty(t('Ще немає дронів'), t('Додайте дрон чи наземку кнопкою «+», завантажте демодані в ⚙ або імпортуйте стартовий набір.'),
-      [btn(t('Додати'), () => droneForm(), 'primary add'), importBtn()]));
+    return h('div', {}, staleBanner(), empty(t('Ще немає дронів'), t('Додайте перший дрон чи шолом — деталі, батареї й польоти підтягнуться до нього. Або подивіться, як усе виглядає, на демоданих.'),
+      [btn(t('Додати дрон'), () => droneForm(), 'primary add'), btn(t('Показати демо'), loadDemo), importBtn()]));
   }
   return h('div', {}, staleBanner(),
     drones.length ? h('div', { class: 'rows' }, drones.map(droneRow)) : null,
@@ -561,32 +567,48 @@ function droneDetail(id) {
   const build = () => { const d = findDrone(id); return d ? droneBody(d) : null; };
   sheet(() => findDrone(id)?.name, build(), {
     live: build,
-    tools: [toolBtn('edit', t('Змінити'), () => droneForm(findDrone(id))), toolBtn('delete', t('Видалити'), () => removeDrone(findDrone(id)), 'danger')],
+    tools: [toolBtn('copy', t('Скопіювати збірку'), () => copyText(buildText(findDrone(id)))), toolBtn('edit', t('Змінити'), () => droneForm(findDrone(id))),
+      toolBtn('delete', t('Видалити'), () => removeDrone(findDrone(id)), 'danger')],
   });
 }
 
+/**
+ * Картка дрона: зверху зведення (тип, вартість, наліт, нові прошивки) і дії; у збірці мотори 1–4 — одним рядком,
+ * порожні слоти — згорнуті; нотатки, конфіги й історія — згорнуті з лічильниками.
+ */
 function droneBody(d) {
   const photo = findPhoto(d.photoId);
   const b = boughtLine(d);
   const flown = state.flights.filter((f) => f.droneId === d.id);
+  const fresh = d.slots.map((s) => findItem(s.itemId)).filter((it) => fwNewer(it));
+  const filled = d.slots.filter((s) => findItem(s.itemId));
+  const empty = d.slots.filter((s) => !findItem(s.itemId));
+  const motors = filled.filter((s) => s.cat === 'motors');
+  const names = [...new Set(motors.map((s) => itemName(findItem(s.itemId))))];
+  const group = motors.length > 1;
+  const rows = filled.flatMap((s) => (!group || !motors.includes(s) ? [slotRow(d, s)] : s !== motors[0] ? []
+    : [fold('drone-motors', [h('span', { class: 'muted small' }, t('Мотори ×{n}', { n: motors.length })), h('span', { class: 'row-title' }, names.length === 1 ? names[0] : t('різні: {n}', { n: names.length }))],
+      h('div', { class: 'rows' }, motors.map((x) => slotRow(d, x))), { cls: 'slot-fold' })]));
+  const sorted = (list) => [...list].sort((a, c) => collate(c.date, a.date));
   return h('div', {},
     photo ? photoBtn(photo.thumb, () => showPhoto(photo.id, dronePhotos(d))) : null,
-    kv([[t('Тип'), kindLabel(d.kind)], [t('Вартість'), fmt.money(droneCost(d))],
-      [t('Куплено'), b ? `${b.o.shop} · ${fmt.date(b.o.date)}` : d.buyDate ? fmt.date(d.buyDate) : null],
-      flown.length ? [t('Наліт'), `${fmtMin(flown.reduce((n, f) => n + flightMin(f), 0))} · ${t('польотів: {n}', { n: flown.length })}`] : null]),
-    box(t('Збірка'), h('div', {},
-      h('div', { class: 'rows' }, d.slots.map((s) => slotRow(d, s))),
-      h('div', { class: 'btn-row' }, btn(t('+ Слот'), () => slotForm(d))))),
-    h('div', { class: 'btn-row' },
-      btn(t('Скопіювати збірку'), () => copyText(buildText(d)), 'primary'),
-      btn(photo ? t('Змінити фото') : t('Фото'), () => droneForm(d)),
+    h('p', { class: 'card-sum' }, [kindLabel(d.kind), fmt.money(droneCost(d)),
+      flown.length ? `${fmtMin(flown.reduce((n, f) => n + flightMin(f), 0))} · ${t('польотів: {n}', { n: flown.length })}` : null].filter(Boolean).join(' · ')),
+    b || d.buyDate ? h('p', { class: 'muted small card-sub' }, t('Куплено: {what}', { what: b ? `${b.o.shop} · ${fmt.date(b.o.date)}` : fmt.date(d.buyDate) })) : null,
+    fresh.length ? h('p', { class: 'fw-new small card-sub' }, fresh.map((it) => `${itemName(it)}: ${fwHint(it)}`).join('; ')) : null,
+    h('div', { class: 'btn-row card-acts' },
       btn(t('Нотатка'), () => noteForm(d)),
-      btn(t('Конфіг'), () => configForm(d))),
-    d.notes?.length ? box(t('Нотатки'), h('div', { class: 'rows' }, [...d.notes].sort((a, b) => collate(b.date, a.date)).map((n) =>
+      btn(t('Конфіг'), () => configForm(d)),
+      btn(photo ? t('Змінити фото') : t('Фото'), () => droneForm(d))),
+    box(t('Збірка · {n}', { n: filled.length }), h('div', {},
+      h('div', { class: 'rows' }, rows),
+      empty.length ? fold('drone-empty', t('Порожні слоти · {n}', { n: empty.length }), h('div', { class: 'rows' }, empty.map((s) => slotRow(d, s)))) : null,
+      h('div', { class: 'btn-row' }, btn(t('+ Слот'), () => slotForm(d), 'quiet')))),
+    d.notes?.length ? fold('drone-notes', t('Нотатки · {n}', { n: d.notes.length }), h('div', { class: 'rows' }, sorted(d.notes).map((n) =>
       row(n.text.split('\n')[0], fmt.date(n.date), '', () => noteView(d, n), { thumb: n.photoId ? thumbImg(n.photoId) : null })))) : null,
-    d.configs?.length ? box(t('Конфіги'), h('div', { class: 'rows' }, [...d.configs].sort((a, b) => collate(b.date, a.date)).map((c) =>
+    d.configs?.length ? fold('drone-configs', t('Конфіги · {n}', { n: d.configs.length }), h('div', { class: 'rows' }, sorted(d.configs).map((c) =>
       row(c.name || t('Конфіг'), [fmt.date(c.date), parseConfig(c.text)?.label].filter(Boolean).join(' · '), '', () => configView(d, c))))) : null,
-    d.history?.length ? fold('drone-history', t('Історія'), historyList(d.history)) : null);
+    d.history?.length ? fold('drone-history', t('Історія · {n}', { n: d.history.length }), historyList(d.history)) : null);
 }
 
 function historyList(list) {
@@ -792,7 +814,7 @@ function itemRow(it) {
   if (it.kind === 'consumable') {
     return row(itemName(it), catLabel(it.cat), `${fmt.num(it.qty)} ${t('шт')}`, () => itemDetail(it.id), { id: it.id, cls: isLow(it) ? 'low' : '', thumb: thumbImg(it.photoId, null) });
   }
-  return row(itemName(it), [catLabel(it.cat), it.fw, fwHint(it), where].filter(Boolean).join(' · '), it.price ? fmt.money(it.price) : '', () => itemDetail(it.id), { id: it.id, thumb: thumbImg(it.photoId, null) });
+  return row(itemName(it), [catLabel(it.cat), it.fw, fwHint(it), where].filter(Boolean).join(' · '), it.price ? fmt.uah(it.price) : '', () => itemDetail(it.id), { id: it.id, thumb: thumbImg(it.photoId, null) });
 }
 
 // Відбір за дроном у «Хочу» й журналі польотів: «Усі» + дрони, що є в списку; спільний вибір, пам'ятається
@@ -819,7 +841,7 @@ function renderStock() {
   if (stockSeg === 'orders') {
     const list = [...state.orders].sort((a, b) => collate(b.date, a.date));
     body = list.length ? h('div', { class: 'rows' }, list.map((o) =>
-      row(o.shop || t('Замовлення'), `${fmt.date(o.date)} · ${t('позицій: {n}', { n: o.lines.length })}`, fmt.money(orderTotal(o)), () => orderForm(o), { id: o.id })))
+      row(o.shop || t('Замовлення'), `${fmt.date(o.date)} · ${t('позицій: {n}', { n: o.lines.length })}`, fmt.uah(orderTotal(o)), () => orderForm(o), { id: o.id })))
       : empty(t('Замовлень немає'), t('Покупка — це замовлення: магазин, дата, позиції й доставка. Позиції одразу лягають на склад.'));
   } else if (stockSeg === 'wish') {
     const all = state.wishes;
@@ -829,7 +851,7 @@ function renderStock() {
       .map((id) => [id, id === NO_DRONE ? t('Без дрона') : findDrone(id)?.name ?? '—']).sort((a, b) => collate(a[1], b[1]));
     const total = (ws) => ['UAH', 'USD'].map((c) => {
       const s = ws.reduce((n, w) => n + (w.currency === c ? num(w.price) : 0), 0);
-      return s ? `${fmt.num(s)} ${c === 'USD' ? '$' : t('грн')}` : null;
+      return s ? `${fmt.num(Math.round(s))} ${c === 'USD' ? '$' : t('грн')}` : null;
     }).filter(Boolean).join(' + ');
     body = all.length ? h('div', {}, droneFilterChips(all), groups.map(([id, name]) => {
       const ws = list.filter((w) => (w.droneId || NO_DRONE) === id).sort((a, b) => collate(a.name, b.name));
@@ -843,13 +865,15 @@ function renderStock() {
       : empty(t('Розхідників немає'), t('Пропелери, ремінці, гвинти — кількістю, з порогом «мало».'));
   } else {
     const units = state.items.filter((it) => it.kind !== 'consumable').sort(byName);
+    // Групи за станом згортаються; «На дроні» (коли довга) й «Продано» — згорнуті, поки їх не відкрили: головне — що лежить на складі
     body = units.length ? h('div', {}, Object.keys(STATUS).map((st) => {
       const list = units.filter((it) => (it.status ?? 'stock') === st);
-      return list.length ? box(`${t(STATUS[st])} · ${list.length}`, h('div', { class: 'rows' }, list.map(itemRow))) : null;
+      return list.length ? fold(`stock-${st}`, `${t(STATUS[st])} · ${list.length}`, h('div', { class: 'rows' }, list.map(itemRow)),
+        { cls: 'group', open: st === 'stock' || st === 'broken' || (st === 'installed' && list.length <= 5) }) : null;
     })) : empty(t('Склад порожній'), t('Додайте замовлення або деталь, що вже була, кнопкою «+».'));
   }
-  return h('div', {}, staleBanner(),
-    h('section', { class: 'hero' }, h('div', { class: 'hero-label' }, t('Вкладено в хобі')), h('div', { class: 'hero-value' }, fmt.money(invested()))),
+  return h('div', {},
+    h('section', { class: 'hero' }, h('div', { class: 'hero-label' }, t('Вкладено в хобі')), h('div', { class: 'hero-value' }, fmt.uah(invested()))),
     seg, body);
 }
 
@@ -868,7 +892,7 @@ function wishRow(w) {
     thumbImg(w.photoId, null),
     h('button', { type: 'button', class: 'row-main', onclick: () => wishForm(w) },
       h('span', { class: 'row-title' }, w.name),
-      h('span', { class: 'muted small' }, [w.price ? `${fmt.num(w.price)} ${w.currency === 'USD' ? '$' : t('грн')}` : null, findDrone(w.droneId)?.name, w.note].filter(Boolean).join(' · '))),
+      h('span', { class: 'muted small' }, [w.price ? `${fmt.num(Math.round(w.price))} ${w.currency === 'USD' ? '$' : t('грн')}` : null, findDrone(w.droneId)?.name, w.note].filter(Boolean).join(' · '))),
     btn(t('У замовлення'), () => wishToOrder(w), 'quiet'));
 }
 
@@ -999,8 +1023,8 @@ function itemBody(it) {
     ]),
     it.status === 'installed' ? h('p', { class: 'muted small' }, t('Зняти деталь — у картці дрона, кнопкою «Замінити».')) : null,
     actions.filter(Boolean).length ? h('div', { class: 'btn-row' }, actions) : null,
-    it.fwLog?.length ? box(t('Прошивки'), h('ul', { class: 'changes' }, [...it.fwLog].reverse().map((x) => h('li', {}, `${fmt.date(x.date)}: ${x.from || '—'} → ${x.to}`)))) : null,
-    it.history?.length ? fold('item-history', t('Історія'), historyList(it.history)) : null);
+    it.fwLog?.length ? fold('item-fw', t('Прошивки · {n}', { n: it.fwLog.length }), h('ul', { class: 'changes' }, [...it.fwLog].reverse().map((x) => h('li', {}, `${fmt.date(x.date)}: ${x.from || '—'} → ${x.to}`)))) : null,
+    it.history?.length ? fold('item-history', t('Історія · {n}', { n: it.history.length }), historyList(it.history)) : null);
 }
 
 async function setStatus(it, status, extra, text) {
@@ -1315,12 +1339,12 @@ function batteryBody(b) {
   states.classList.add('segmented', 'bat-states');
   const days = Math.floor((Date.now() - (b.stateAt ?? Date.now())) / 864e5);
   return h('div', {},
-    kv([[t('Роз’єм'), b.connector], [t('Ціна'), b.price ? fmt.money(b.price) : null], [t('Куплено'), b.buyDate ? fmt.date(b.buyDate) : null],
-      [t('Циклів'), String(b.cycles?.length ?? 0)], [t('У цьому стані'), t('{n} дн.', { n: days })]]),
-    h('div', { class: 'field-label' }, t('Стан')), states,
+    h('p', { class: 'card-sum' }, [t('циклів: {n}', { n: b.cycles?.length ?? 0 }), t('у цьому стані {n} дн.', { n: days })].join(' · ')),
+    h('p', { class: 'muted small card-sub' }, [b.connector, b.price ? fmt.money(b.price) : null, b.buyDate ? t('куплено {date}', { date: fmt.date(b.buyDate) }) : null].filter(Boolean).join(' · ')),
+    states,
     h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary')),
     irBox(b),
-    b.cycles?.length ? box(t('Цикли'), h('ul', { class: 'changes' }, [...b.cycles].reverse().map((c) => h('li', {},
+    b.cycles?.length ? fold('bat-cycles', t('Цикли · {n}', { n: b.cycles.length }), h('ul', { class: 'changes' }, [...b.cycles].reverse().map((c) => h('li', {},
       [fmt.date(c.date), c.flightId && t('політ'), c.v && `${c.v} ${t('В/банку')}`, c.ir && `IR ${c.ir} ${t('мОм')}`].filter(Boolean).join(' · '))))) : null);
 }
 
@@ -1352,10 +1376,14 @@ function irBox(b) {
       h('div', { class: 'ir-x muted small' }, h('span', {}, fmt.date(pts[0].date)), h('span', {}, fmt.date(pts.at(-1).date))),
       h('div', { class: 'ir-legend small' }, h('span', { class: 'ir-avg' }, t('середній')), h('span', { class: 'ir-max' }, t('найгірша банка'))));
   }
-  return box(t('IR, мОм'), h('div', {}, chart,
-    h('div', { class: 'field-label' }, t('Останній замір по банках · {date}', { date: fmt.date(pts.at(-1).date) })),
-    h('div', { class: 'ir-cells' }, last.map((v, i) => h('span', { class: `ir-cell${bad(v) ? ' bad' : ''}` }, h('small', {}, String(i + 1)), f1(v)))),
-    last.some(bad) ? h('p', { class: 'warn-text small' }, t('Банка {n}: IR понад 1,5× медіани пакета ({m} мОм) — стежте за нею', { n: last.map((v, i) => (bad(v) ? i + 1 : null)).filter(Boolean).join(', '), m: f1(median) })) : null));
+  // Зверху — головне (середній IR, найгірша банка, тривога); графік і банки — під згорткою
+  const worst = last.indexOf(Math.max(...last));
+  return box(t('IR, мОм'), h('div', {},
+    h('p', { class: 'card-sum' }, t('середній {a} · найгірша банка {n}: {w}', { a: f1(last.reduce((n, x) => n + x, 0) / last.length), n: worst + 1, w: f1(last[worst]) }),
+      h('span', { class: 'muted small' }, ` · ${fmt.date(pts.at(-1).date)}`)),
+    last.some(bad) ? h('p', { class: 'warn-text small' }, t('Банка {n}: IR понад 1,5× медіани пакета ({m} мОм) — стежте за нею', { n: last.map((v, i) => (bad(v) ? i + 1 : null)).filter(Boolean).join(', '), m: f1(median) })) : null,
+    fold('bat-ir', pts.length > 1 ? t('Графік і банки') : t('Банки'), h('div', {}, chart,
+      h('div', { class: 'ir-cells' }, last.map((v, i) => h('span', { class: `ir-cell${bad(v) ? ' bad' : ''}` }, h('small', {}, String(i + 1)), f1(v))))))));
 }
 
 function cycleSheet(b) {
@@ -1393,14 +1421,23 @@ function renderFlights() {
   const seg = chips(segs.map(([k, l]) => [k, t(l)]), segs.some(([k]) => k === flightSeg) ? flightSeg : 'log', (v) => { flightSeg = v; remember('fpv-log:flight-seg', v); render(); });
   seg.classList.add('segmented', 'seg-fit');
   segIcons(seg, { log: 'list', stats: 'chart', pre: 'wind' });
-  if (flightSeg === 'pre') return h('div', {}, staleBanner(), seg, renderPreflight());
+  if (flightSeg === 'pre') return h('div', {}, seg, renderPreflight());
   if (!list.length) {
-    return h('div', {}, staleBanner(), seg, empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
+    return h('div', {}, seg, empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
       state.drones.length ? [btn(t('Додати'), () => flightForm(), 'primary add')] : []));
   }
-  return h('div', {}, staleBanner(), seg, flightSeg === 'stats' ? renderStats() : h('div', {}, droneFilterChips(list), h('div', { class: 'rows' }, byDroneFilter(list).map((f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
-      [fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' '), f.crash ? `${t('падіння')}${f.broke ? `: ${f.broke}` : ''}` : ''].filter(Boolean).join(' · '),
-      fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' })))));
+  const flightRow = (f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
+    [fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' '), f.crash ? `${t('падіння')}${f.broke ? `: ${f.broke}` : ''}` : ''].filter(Boolean).join(' · '),
+    fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' });
+  // Журнал — місяцями: останній розгорнутий, решта згорнуті з кількістю й нальотом
+  const shown = byDroneFilter(list);
+  const months = [...new Set(shown.map((f) => f.date.slice(0, 7)))];
+  const monthName = (ym) => { const m = new Date(`${ym}-01T00:00:00`).toLocaleDateString(locale(), { month: 'long', year: 'numeric' }); return m[0].toUpperCase() + m.slice(1); };
+  return h('div', {}, seg, flightSeg === 'stats' ? renderStats() : h('div', {}, droneFilterChips(list), months.map((ym, i) => {
+    const fl = shown.filter((f) => f.date.startsWith(ym));
+    return fold(`flights-${ym}`, `${monthName(ym)} · ${t('польотів: {n}', { n: fl.length })} · ${fmtMin(fl.reduce((n, f) => n + flightMin(f), 0))}`,
+      h('div', { class: 'rows' }, fl.map(flightRow)), { cls: 'group', open: i === 0 });
+  })));
 }
 
 /** Горизонтальні смуги: [[підпис, значення]], довжина — частка найбільшого. */
@@ -1437,7 +1474,7 @@ function renderStats() {
       stat(t('Польотів'), fmt.num(state.flights.length)),
       stat(t('Наліт'), fmtMin(mins)),
       stat(t('Хвилина польоту'), mins ? fmt.money(invested() / mins) : '—', 'accent'),
-      stat(t('Ремонт (зламане)'), fmt.money(repair))),
+      stat(t('Ремонт (зламане)'), fmt.uah(repair))),
     h('p', { class: 'muted small' }, t('Хвилина польоту — «Вкладено в хобі» ({sum}), поділене на хвилини нальоту.', { sum: fmt.money(invested()) })),
     box(t('Наліт за місяцями'), bars(months, fmtMin)),
     box(t('Наліт за дронами'), bars(byDrone, fmtMin)));
@@ -1530,19 +1567,24 @@ function renderPreflight() {
   const ms = (v) => fmt.num(Math.round(v * 10) / 10);
   const head = h('div', { class: 'pre-place' },
     h('span', { class: 'row-title' }, place ? place.label : t('Місце не вибрано')),
-    h('div', { class: 'btn-row' }, btn(t('Моє місце'), locate), btn(t('Інше місце'), placeSheet),
-      place ? btn(preLoading ? t('Оновлюю…') : t('Оновити'), () => { preTried = 0; loadWeather(place); render(); }, 'quiet') : null));
+    h('div', { class: 'btn-row compact' }, btn(t('Моє місце'), locate, 'mini'), btn(t('Інше місце'), placeSheet, 'mini'),
+      place ? btn(preLoading ? t('Оновлюю…') : t('Оновити'), () => { preTried = 0; loadWeather(place); render(); }, 'mini') : null));
   let weather;
   if (mine?.hours.length) {
     const v = verdict(mine.hours, mine.kp?.kp ?? null);
     const WHY = { вітер: t('вітер {v} м/с'), пориви: t('пориви {v} м/с'), опади: t('опади {v} мм/год'), Kp: 'Kp {v}', мороз: t('мороз {v} °C') };
     const kp = mine.kp?.kp;
     const kpState = kp >= LIMITS.kp[1] ? t('магнітна буря, GPS і компас можуть брехати') : kp >= LIMITS.kp[0] ? t('збурення') : t('спокійно');
+    // Головне зверху: вердикт і найгірші значення на 3 години; погодинна таблиця й пороги — під згорткою
+    const soon = mine.hours.slice(0, 3);
+    const top = (k) => ms(Math.max(...soon.map((x) => Number(x[k]) || 0)));
     weather = h('div', {},
       h('div', { class: `verdict ${v.level}` },
         h('b', {}, { green: t('Можна літати'), yellow: t('Обережно'), red: t('Краще не літати') }[v.level]),
-        h('span', {}, v.why.length ? v.why.map(([k, x]) => WHY[k].replace('{v}', ms(x))).join(' · ') : t('Найближчі 3 години — у межах порогів'))),
-      h('div', { class: 'wx' },
+        h('span', {}, v.why.length ? v.why.map(([k, x]) => WHY[k].replace('{v}', ms(x))).join(' · ') : t('Найближчі 3 години — у межах порогів')),
+        h('span', { class: 'verdict-nums' }, [t('вітер до {v} м/с', { v: top('w10') }), t('пориви {v}', { v: top('g') }),
+          `${ms(Math.min(...soon.map((x) => x.t)))} °C`, kp === undefined ? null : `Kp ${ms(kp)}`].filter(Boolean).join(' · '))),
+      fold('pre-hours', t('Погодинно · {n} год', { n: mine.hours.length }), h('div', {}, h('div', { class: 'wx' },
         [t('Час'), '°C', t('10 м'), t('80 м'), t('120 м'), t('Пориви'), t('Опади')].map((x) => h('b', {}, x)),
         mine.hours.flatMap((x) => [x.time.slice(11, 16), ms(x.t), ms(x.w10), ms(x.w80), ms(x.w120), ms(x.g), x.p ? ms(x.p) : x.pp ? `${x.pp}%` : '—'].map((c) => h('span', {}, c)))),
       h('p', { class: 'muted small' }, [
@@ -1550,7 +1592,7 @@ function renderPreflight() {
         kp === undefined ? t('Kp недоступний.') : t('Kp {kp} — {state} (NOAA, {at} UTC).', { kp: ms(kp), state: kpState, at: String(mine.kp.at).slice(11, 16) }),
         t('Оновлено {time}.', { time: shortWhen(mine.at) })].join(' ')),
       h('p', { class: 'muted small' }, t('Пороги на найближчі 3 години (жовтий / червоний): вітер на 10 м {w} м/с, пориви {g} м/с, опади {r} мм/год, Kp {k}; мороз — жовтий (LiPo гріти).',
-        { w: LIMITS.wind.join(' / '), g: LIMITS.gust.join(' / '), r: LIMITS.rain.map(fmt.num).join(' / '), k: LIMITS.kp.join(' / ') })));
+        { w: LIMITS.wind.join(' / '), g: LIMITS.gust.join(' / '), r: LIMITS.rain.map(fmt.num).join(' / '), k: LIMITS.kp.join(' / ') })))));
   } else {
     weather = h('p', { class: 'muted' }, !place ? t('Виберіть місце — з телефона чи назвою: буде вітер на висотах, пориви, опади й Kp.')
       : preLoading ? t('Завантажую погоду…') : t('Погоди ще немає — потрібен інтернет.'));
@@ -2063,10 +2105,19 @@ function marnotratRow() {
     }, 'primary'))]);
 }
 
+/** Записи демоданих (id з «demo-») по сховищах. */
+const demoIds = () => Object.fromEntries(db.DATA_STORES.map((s) => [s, state[s].filter((x) => String(x.id).startsWith('demo-')).map((x) => x.id)]).filter(([, ids]) => ids.length));
+
 function demoRow() {
-  return setRow('demo', 'play', t('Демодані'), '', [
+  const ids = demoIds();
+  const n = Object.values(ids).reduce((k, x) => k + x.length, 0);
+  return setRow('demo', 'play', t('Демодані'), n ? t('записів: {n}', { n }) : '', [
     h('p', { class: 'muted small' }, t('Вигаданий 5″ самозбір на Walksnail з історією заміни мотора й прошивок, BNF Meteor75 із замовлення, шолом Cobra X, батареї й десять польотів.')),
-    h('div', { class: 'btn-row' }, btn(t('Завантажити демодані'), loadDemo))]);
+    h('div', { class: 'btn-row' }, btn(t('Завантажити демодані'), loadDemo),
+      n ? btn(t('Прибрати демодані'), () => confirmSheet(t('Прибрати демодані?'), t('Видаляться лише демозаписи ({n}); ваші дрони, деталі й польоти лишаться.', { n }), t('Прибрати'), async () => {
+        await save({ ...Object.fromEntries(Object.entries(ids).map(([s, list]) => [s, { del: list }])), ...(ids.photos ? { blobs: { del: ids.photos } } : {}) });
+        toast(t('Демодані прибрано'));
+      }), 'danger') : null)]);
 }
 
 function wipeRow() {
@@ -2116,9 +2167,9 @@ function staleRow() {
     }, 'primary'))]);
 }
 
-function aboutPanel() {
+function aboutRow() {
   const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener' }, text);
-  return h('section', { class: 'panel about' },
+  return setRow('about', 'info', t('Про застосунок'), self.APP_VERSION, h('section', { class: 'panel about' },
     h('div', { class: 'about-head' },
       h('img', { src: './icons/icon-192.png', alt: '', width: 48, height: 48, class: 'app-icon big' }),
       h('div', {}, h('h3', {}, 'FPV Log'),
@@ -2128,16 +2179,16 @@ function aboutPanel() {
     h('nav', { class: 'about-links' },
       link('https://github.com/VitaliyLobko/fpv-log/issues/new', t('Повідомити про помилку')),
       link('https://github.com/VitaliyLobko/fpv-log', t('Код')),
-      link('https://github.com/VitaliyLobko/fpv-log/blob/main/LICENSE', t('Ліцензія MIT'))));
+      link('https://github.com/VitaliyLobko/fpv-log/blob/main/LICENSE', t('Ліцензія MIT')))));
 }
 
 function renderSettings() {
   $('subtitle').textContent = t('версія {v}', { v: self.APP_VERSION });
   return h('div', { class: 'settings' },
-    settingsGroup(t('Про застосунок'), [aboutPanel()]),
     settingsGroup(t('Дані'), [syncRow(), backupRow(), marnotratRow(), demoRow(), wipeRow()]),
     settingsGroup(t('Вигляд'), [themeRow(), backdropRow()]),
-    settingsGroup(t('Батареї'), [staleRow()]));
+    settingsGroup(t('Батареї'), [staleRow()]),
+    settingsGroup(t('Застосунок'), [aboutRow()]));
 }
 
 // ---------- навігація ----------

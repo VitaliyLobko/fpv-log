@@ -722,10 +722,10 @@ span.ir-max::before { background: var(--warn); }
 .seg-ico .ico { display: grid; flex: none; }
 .seg-ico .ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
 .seg-ico .seg-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 479px) {
-  .chips.segmented.seg-ico button { padding-inline: 10px; }
-  .seg-ico button:not(.on) .seg-label { display: none; }
-}
+/* Значок і під ним дрібний підпис у кожного сегмента, як у нижніх вкладках: не треба вгадувати, що за ♡ */
+.chips.segmented.seg-ico { grid-auto-columns: minmax(0, 1fr); }
+.chips.segmented.seg-ico button { flex-direction: column; gap: 2px; min-height: 52px; padding: 5px 2px; white-space: normal; }
+.seg-ico .seg-label { font-size: 11.5px; font-weight: 650; line-height: 1.1; text-align: center; overflow-wrap: anywhere; }
 /* Стан батареї — чотири довгі назви: на телефоні сіткою 2×2, текст цілий */
 @media (max-width: 479px) {
   .chips.segmented.bat-states { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
@@ -758,3 +758,27 @@ button.row-main { padding: 0; border: 0; background: none; color: inherit; font:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* ---- компактні екрани: головне зверху, решта — у згортках з лічильниками ---- */
+.card-sum { margin: 0 0 4px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.card-sub { margin: 0 0 4px; }
+.card-acts { margin-top: 10px; }
+.card-acts .btn { flex: 1 1 0; min-width: 0; padding-inline: 8px; }
+.btn-row.compact { margin: 6px 0 10px; }
+.btn-row.compact .btn { flex: 0 1 auto; min-height: 44px; }
+.ex-more > summary { gap: 6px; }
+.ex-more > div, .ex-more > ul { padding-bottom: 8px; }
+/* Групи списку на екрані (склад за станом, польоти за місяцями): плашка на фоні з візерунком */
+.ex-more.group { margin: 12px 0 6px; border-top: 0; }
+.ex-more.group > summary { padding: 4px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text);
+  font-size: 14px; font-weight: 700; }
+.ex-more.group > summary::before { color: var(--accent-2); }
+.ex-more.group[open] > summary { margin-bottom: 6px; }
+/* Мотори 1–4 одним рядком збірки: розгортаються в чотири слоти */
+.ex-more.slot-fold { margin: 0; border-top: 0; }
+.box .rows > .ex-more.slot-fold + .row, .box .rows > .row + .ex-more.slot-fold { border-top: 1px solid var(--line-soft); }
+.ex-more.slot-fold > summary { padding: 8px 2px; color: var(--text); font-size: inherit; font-weight: inherit; }
+.ex-more.slot-fold > summary::before { color: var(--accent-2); }
+.slot-fold > summary { flex-wrap: wrap; }
+.slot-fold > summary .row-title { flex: 1 1 100%; padding-left: 16px; }
+.verdict-nums { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--muted); }

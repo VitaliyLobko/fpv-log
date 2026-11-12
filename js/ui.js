@@ -35,6 +35,8 @@ export const fmt = {
   num: (n) => nf(NUM).format(Number(n) || 0),
   // Гривня — у самому форматері: інакше валюту довелося б дописувати в кожному рядку.
   money: (n) => `${nf(MONEY).format(Number(n) || 0)} грн`,
+  // Цілі гривні — для рядків списків і підсумків: «1 200 грн»; копійки лишаються в картках і формах
+  uah: (n) => `${nf({ maximumFractionDigits: 0 }).format(Math.round(Number(n) || 0))} грн`,
   signed: (n) => (n > 0 ? `+${nf(NUM).format(n)}` : nf(NUM).format(n)),
   date: (iso) => (iso ? iso.split('-').reverse().join('.') : t('без дати')),
   time: (ms) => new Date(ms).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }),
@@ -513,6 +515,7 @@ const TOOL_ICON = {
   wind: '<path d="M3 9h11a3 3 0 1 0-3-3"/><path d="M3 15h15a3 3 0 1 1-3 3"/><path d="M3 12h7"/>',
   // рядок коду — конфіг
   code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/>',
 };
 
