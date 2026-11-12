@@ -1,0 +1,517 @@
+{
+ "app": "fpv-log",
+ "format": 1,
+ "exportedAt": "2026-11-12T00:00:00.000Z",
+ "data": {
+  "drones": [
+   {
+    "id": "demo-quad",
+    "name": "Демо 5″ Walksnail",
+    "kind": "self",
+    "group": "drone",
+    "price": null,
+    "buyDate": "2025-03-10",
+    "updated": 1,
+    "slots": [
+     {
+      "id": "demo-s1",
+      "cat": "frame",
+      "itemId": "demo-frame"
+     },
+     {
+      "id": "demo-s2",
+      "cat": "motors",
+      "itemId": "demo-motors"
+     },
+     {
+      "id": "demo-s3",
+      "cat": "fc",
+      "itemId": null
+     },
+     {
+      "id": "demo-s4",
+      "cat": "esc",
+      "tpl": "Регулятор / стек",
+      "itemId": "demo-stack"
+     },
+     {
+      "id": "demo-s5",
+      "cat": "vtx",
+      "itemId": "demo-vtx"
+     },
+     {
+      "id": "demo-s6",
+      "cat": "camera",
+      "itemId": "demo-cam"
+     },
+     {
+      "id": "demo-s7",
+      "cat": "rx",
+      "itemId": "demo-rx"
+     },
+     {
+      "id": "demo-s8",
+      "cat": "gps",
+      "itemId": "demo-gps"
+     },
+     {
+      "id": "demo-s9",
+      "cat": "antenna",
+      "tpl": "Антена VTX",
+      "itemId": "demo-ant"
+     },
+     {
+      "id": "demo-s10",
+      "cat": "antenna",
+      "tpl": "Антена RX",
+      "itemId": null
+     },
+     {
+      "id": "demo-s11",
+      "cat": "props",
+      "itemId": "demo-props"
+     }
+    ],
+    "notes": [
+     {
+      "id": "demo-n1",
+      "date": "2025-03-22",
+      "text": "Перший політ. Rates трохи жорсткі — знизив RC rate до 1.0.",
+      "photoId": null
+     },
+     {
+      "id": "demo-n2",
+      "date": "2025-06-02",
+      "text": "Падіння в дерево: погнувся вал мотора, поставив запасний комплект.",
+      "photoId": null
+     }
+    ],
+    "configs": [
+     {
+      "id": "demo-c1",
+      "name": "Betaflight 4.5.1 · diff all",
+      "date": "2025-03-20",
+      "text": "# diff all\n# Betaflight / STM32F405 (S405) 4.5.1\nboard_name SPEEDYBEEF405V4\n\nfeature GPS\nserial 1 2 115200 57600 0 115200\nset motor_pwm_protocol = DSHOT600\nset gps_provider = UBLOX\n\nprofile 0\nset p_pitch = 52\nset d_pitch = 44\n\nrateprofile 0\nset roll_rc_rate = 100\nset pitch_rc_rate = 100\n"
+     }
+    ],
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Заведено"
+     },
+     {
+      "date": "2025-06-02",
+      "text": "Мотори: T-Motor Velox V2207 1950KV ×4 → T-Motor Velox V2207 1950KV ×4 (зламана: погнутий вал після падіння)"
+     }
+    ]
+   },
+   {
+    "id": "demo-cobra",
+    "name": "Skyzone Cobra X",
+    "kind": "goggles",
+    "group": "ground",
+    "price": 9800,
+    "buyDate": "2024-11-05",
+    "updated": 1,
+    "slots": [
+     {
+      "id": "demo-g1",
+      "cat": "vrx",
+      "itemId": "demo-vrx"
+     },
+     {
+      "id": "demo-g2",
+      "cat": "antenna",
+      "tpl": "Антени",
+      "itemId": "demo-gant"
+     },
+     {
+      "id": "demo-g3",
+      "cat": "gbattery",
+      "tpl": "Батарея",
+      "itemId": "demo-gbat"
+     }
+    ],
+    "notes": [],
+    "configs": [],
+    "history": [
+     {
+      "date": "2024-11-05",
+      "text": "Заведено"
+     }
+    ]
+   }
+  ],
+  "items": [
+   {
+    "id": "demo-frame",
+    "kind": "unit",
+    "cat": "frame",
+    "brand": "TBS",
+    "model": "Source One V5 5″",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 2023.04,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     }
+    ],
+    "status": "installed",
+    "droneId": "demo-quad"
+   },
+   {
+    "id": "demo-motors",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "T-Motor",
+    "model": "Velox V2207 1950KV ×4",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 3596.51,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     },
+     {
+      "date": "2025-06-02",
+      "text": "Встановлено на «Демо 5″ Walksnail» (Мотори)"
+     }
+    ],
+    "status": "installed",
+    "droneId": "demo-quad"
+   },
+   {
+    "id": "demo-motors-old",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "T-Motor",
+    "model": "Velox V2207 1950KV ×4",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 3596.51,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     },
+     {
+      "date": "2025-06-02",
+      "text": "Знято з «Демо 5″ Walksnail» (Мотори), зламана: погнутий вал після падіння"
+     }
+    ],
+    "status": "broken",
+    "reason": "погнутий вал після падіння"
+   },
+   {
+    "id": "demo-stack",
+    "kind": "unit",
+    "cat": "stack",
+    "brand": "SpeedyBee",
+    "model": "F405 V4 BLS 55A stack",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 3146.95,
+    "fwLog": [
+     {
+      "date": "2025-03-20",
+      "from": "Betaflight 4.4.3",
+      "to": "Betaflight 4.5.1"
+     }
+    ],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     }
+    ],
+    "status": "installed",
+    "droneId": "demo-quad",
+    "fw": "Betaflight 4.5.1"
+   },
+   {
+    "id": "demo-vtx",
+    "kind": "unit",
+    "cat": "vtx",
+    "brand": "Walksnail",
+    "model": "Avatar HD Pro Kit VTX",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-quad",
+    "price": 6200,
+    "buyDate": "2025-02-14",
+    "fw": "38.44.13"
+   },
+   {
+    "id": "demo-cam",
+    "kind": "unit",
+    "cat": "camera",
+    "brand": "Walksnail",
+    "model": "Avatar HD Pro camera",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-quad",
+    "price": 0,
+    "specs": "у комплекті з VTX"
+   },
+   {
+    "id": "demo-rx",
+    "kind": "unit",
+    "cat": "rx",
+    "brand": "RadioMaster",
+    "model": "RP1 ELRS 2.4",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-quad",
+    "price": 750,
+    "fw": "ExpressLRS 3.5.3"
+   },
+   {
+    "id": "demo-gps",
+    "kind": "unit",
+    "cat": "gps",
+    "brand": "Matek",
+    "model": "M10Q-5883",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-quad",
+    "price": 1100
+   },
+   {
+    "id": "demo-ant",
+    "kind": "unit",
+    "cat": "antenna",
+    "brand": "Lumenier",
+    "model": "AXII 2 RHCP",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-quad",
+    "price": 650
+   },
+   {
+    "id": "demo-props",
+    "kind": "unit",
+    "cat": "props",
+    "brand": "HQProp",
+    "model": "Ethix S5 5″ (комплект)",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-quad",
+    "price": 160
+   },
+   {
+    "id": "demo-ant2",
+    "kind": "unit",
+    "cat": "antenna",
+    "brand": "Foxeer",
+    "model": "Lollipop 4 RHCP",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "stock",
+    "price": 450
+   },
+   {
+    "id": "demo-vrx",
+    "kind": "unit",
+    "cat": "vrx",
+    "brand": "Walksnail",
+    "model": "Avatar VRX",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-cobra",
+    "price": 4800,
+    "fw": "38.44.13"
+   },
+   {
+    "id": "demo-gant",
+    "kind": "unit",
+    "cat": "antenna",
+    "brand": "Lumenier",
+    "model": "AXII 2 (пара)",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-cobra",
+    "price": 1200
+   },
+   {
+    "id": "demo-gbat",
+    "kind": "unit",
+    "cat": "gbattery",
+    "brand": "",
+    "model": "2S 18650 3500 мАг",
+    "fwLog": [],
+    "updated": 1,
+    "history": [],
+    "status": "installed",
+    "droneId": "demo-cobra",
+    "price": 600
+   },
+   {
+    "id": "demo-cons1",
+    "kind": "consumable",
+    "cat": "props",
+    "brand": "HQProp",
+    "model": "Ethix S5 5″, комплект",
+    "qty": 3,
+    "low": 4,
+    "price": 640,
+    "status": "stock",
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "demo-cons2",
+    "kind": "consumable",
+    "cat": "other",
+    "brand": "",
+    "model": "Ремінці для АКБ",
+    "qty": 5,
+    "low": 2,
+    "price": 300,
+    "status": "stock",
+    "updated": 1,
+    "history": []
+   }
+  ],
+  "orders": [
+   {
+    "id": "demo-ord1",
+    "shop": "GetFPV",
+    "date": "2025-03-10",
+    "currency": "USD",
+    "rate": 41.21,
+    "shipping": 25,
+    "note": "",
+    "lines": [
+     {
+      "id": "demo-l1",
+      "kind": "unit",
+      "cat": "frame",
+      "brand": "TBS",
+      "model": "Source One V5 5″",
+      "price": 45,
+      "qty": 1,
+      "itemIds": [
+       "demo-frame"
+      ]
+     },
+     {
+      "id": "demo-l2",
+      "kind": "unit",
+      "cat": "motors",
+      "brand": "T-Motor",
+      "model": "Velox V2207 1950KV ×4",
+      "price": 80,
+      "qty": 1,
+      "itemIds": [
+       "demo-motors"
+      ]
+     },
+     {
+      "id": "demo-l3",
+      "kind": "unit",
+      "cat": "stack",
+      "brand": "SpeedyBee",
+      "model": "F405 V4 BLS 55A stack",
+      "price": 70,
+      "qty": 1,
+      "itemIds": [
+       "demo-stack"
+      ]
+     },
+     {
+      "id": "demo-l4",
+      "kind": "unit",
+      "cat": "motors",
+      "brand": "T-Motor",
+      "model": "Velox V2207 1950KV ×4",
+      "price": 80,
+      "qty": 1,
+      "itemIds": [
+       "demo-motors-old"
+      ]
+     }
+    ],
+    "updated": 1
+   }
+  ],
+  "batteries": [
+   {
+    "id": "demo-b1",
+    "num": "1",
+    "brand": "CNHL G+Plus",
+    "s": 6,
+    "mah": 2200,
+    "c": 70,
+    "connector": "XT60",
+    "price": 2300,
+    "buyDate": "2025-03-10",
+    "state": "charged",
+    "stateAt": 1751392800000,
+    "updated": 1,
+    "cycles": [
+     {
+      "id": "demo-cy1",
+      "date": "2025-03-22",
+      "v": "3.72",
+      "ir": "4, 4, 5, 4, 4, 5"
+     },
+     {
+      "id": "demo-cy2",
+      "date": "2025-06-02",
+      "v": "3.65",
+      "ir": ""
+     }
+    ]
+   },
+   {
+    "id": "demo-b2",
+    "num": "2",
+    "brand": "CNHL G+Plus",
+    "s": 6,
+    "mah": 2200,
+    "c": 70,
+    "connector": "XT60",
+    "price": 2300,
+    "buyDate": "2025-03-10",
+    "state": "storage",
+    "stateAt": 1751392800000,
+    "updated": 1,
+    "cycles": [
+     {
+      "id": "demo-cy3",
+      "date": "2025-03-22",
+      "v": "3.70",
+      "ir": ""
+     }
+    ]
+   }
+  ]
+ }
+}

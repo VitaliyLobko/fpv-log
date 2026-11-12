@@ -1,0 +1,322 @@
+{
+ "app": "fpv-log",
+ "format": 1,
+ "exportedAt": "2026-11-12T00:00:00.000Z",
+ "data": {
+  "drones": [
+   {
+    "id": "st-tx12",
+    "name": "RadioMaster TX12",
+    "kind": "radio",
+    "group": "ground",
+    "price": null,
+    "updated": 1,
+    "slots": [
+     {
+      "id": "st-tx12-s1",
+      "cat": "txmodule",
+      "tpl": "Внутрішній модуль",
+      "itemId": "st-tx12-int"
+     },
+     {
+      "id": "st-tx12-s2",
+      "cat": "txmodule",
+      "tpl": "Зовнішній модуль",
+      "itemId": null
+     }
+    ],
+    "notes": [],
+    "configs": [],
+    "history": []
+   },
+   {
+    "id": "st-m75a",
+    "name": "BETAFPV Meteor75 Pro (аналог)",
+    "kind": "bnf",
+    "group": "drone",
+    "price": null,
+    "updated": 1,
+    "slots": [
+     {
+      "id": "st-m75a-s1",
+      "cat": "frame",
+      "itemId": null
+     },
+     {
+      "id": "st-m75a-s2",
+      "cat": "aio",
+      "itemId": "st-m75a-aio"
+     },
+     {
+      "id": "st-m75a-s3",
+      "cat": "motors",
+      "itemId": "st-m75a-mot"
+     },
+     {
+      "id": "st-m75a-s4",
+      "cat": "camera",
+      "itemId": "st-m75a-cam"
+     },
+     {
+      "id": "st-m75a-s5",
+      "cat": "vtx",
+      "itemId": "st-m75a-vtx"
+     },
+     {
+      "id": "st-m75a-s6",
+      "cat": "props",
+      "itemId": "st-m75a-props"
+     }
+    ],
+    "notes": [
+     {
+      "id": "st-m75a-n1",
+      "date": "2026-11-12",
+      "text": "Ревізію (2023/2024) уточнити.",
+      "photoId": null
+     }
+    ],
+    "configs": [],
+    "history": []
+   },
+   {
+    "id": "st-m75w",
+    "name": "BETAFPV Meteor75 Pro (Walksnail)",
+    "kind": "bnf",
+    "group": "drone",
+    "price": null,
+    "updated": 1,
+    "slots": [
+     {
+      "id": "st-m75w-s1",
+      "cat": "frame",
+      "itemId": null
+     },
+     {
+      "id": "st-m75w-s2",
+      "cat": "aio",
+      "itemId": "st-m75w-aio"
+     },
+     {
+      "id": "st-m75w-s3",
+      "cat": "motors",
+      "itemId": "st-m75w-mot"
+     },
+     {
+      "id": "st-m75w-s4",
+      "cat": "camera",
+      "itemId": "st-m75w-cam"
+     },
+     {
+      "id": "st-m75w-s5",
+      "cat": "vtx",
+      "itemId": "st-m75w-vtx"
+     },
+     {
+      "id": "st-m75w-s6",
+      "cat": "props",
+      "itemId": "st-m75w-props"
+     }
+    ],
+    "notes": [
+     {
+      "id": "st-m75w-n1",
+      "date": "2026-11-12",
+      "text": "Моделі Walksnail VTX і камери уточнити.",
+      "photoId": null
+     }
+    ],
+    "configs": [],
+    "history": []
+   },
+   {
+    "id": "st-cobra",
+    "name": "Skyzone Cobra X",
+    "kind": "goggles",
+    "group": "ground",
+    "price": null,
+    "updated": 1,
+    "slots": [
+     {
+      "id": "st-cobra-s1",
+      "cat": "vrx",
+      "itemId": "st-cobra-vrx"
+     },
+     {
+      "id": "st-cobra-s2",
+      "cat": "antenna",
+      "tpl": "Антени",
+      "itemId": null
+     },
+     {
+      "id": "st-cobra-s3",
+      "cat": "gbattery",
+      "tpl": "Батарея",
+      "itemId": null
+     }
+    ],
+    "notes": [],
+    "configs": [],
+    "history": []
+   }
+  ],
+  "items": [
+   {
+    "id": "st-tx12-int",
+    "kind": "unit",
+    "cat": "txmodule",
+    "brand": "RadioMaster",
+    "model": "TX12 ELRS 2.4 ГГц (внутрішній)",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-tx12",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75a-aio",
+    "kind": "unit",
+    "cat": "aio",
+    "brand": "BETAFPV",
+    "model": "Matrix 1S 5in1",
+    "specs": "FC + ESC + ELRS 2.4",
+    "status": "installed",
+    "droneId": "st-m75a",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75a-mot",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "BETAFPV",
+    "model": "1102 22000KV ×4",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75a",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75a-cam",
+    "kind": "unit",
+    "cat": "camera",
+    "brand": "BETAFPV",
+    "model": "C03",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75a",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75a-vtx",
+    "kind": "unit",
+    "cat": "vtx",
+    "brand": "",
+    "model": "Аналоговий VTX 5.8 ГГц",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75a",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75a-props",
+    "kind": "unit",
+    "cat": "props",
+    "brand": "Gemfan",
+    "model": "45 мм 3-лопатеві",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75a",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75w-aio",
+    "kind": "unit",
+    "cat": "aio",
+    "brand": "BETAFPV",
+    "model": "Matrix 1S 5in1",
+    "specs": "FC + ESC + ELRS 2.4",
+    "status": "installed",
+    "droneId": "st-m75w",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75w-mot",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "BETAFPV",
+    "model": "1102 22000KV ×4",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75w",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75w-cam",
+    "kind": "unit",
+    "cat": "camera",
+    "brand": "Walksnail",
+    "model": "камера (модель уточнити)",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75w",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75w-vtx",
+    "kind": "unit",
+    "cat": "vtx",
+    "brand": "Walksnail",
+    "model": "VTX (модель уточнити)",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75w",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-m75w-props",
+    "kind": "unit",
+    "cat": "props",
+    "brand": "Gemfan",
+    "model": "45 мм 3-лопатеві",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-m75w",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   },
+   {
+    "id": "st-cobra-vrx",
+    "kind": "unit",
+    "cat": "vrx",
+    "brand": "Walksnail",
+    "model": "VRX модуль",
+    "specs": "",
+    "status": "installed",
+    "droneId": "st-cobra",
+    "fwLog": [],
+    "updated": 1,
+    "history": []
+   }
+  ]
+ }
+}

@@ -1,0 +1,660 @@
+:root {
+  --bg: #101310;
+  --bg-glow: #1b2119;
+  --surface: #191e18;
+  --surface-2: #232a22;
+  --seg-on: #343e32;
+  --line: #2e362d;
+  --line-soft: #262d25;
+  --text: #eaeee5;
+  --muted: #949e90;
+  --accent: #ec7f2f;
+  --accent-2: #f3a05c;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  /* заливка кнопок і вибраного — окремо від акцентного тексту; у темній це той самий помаранчевий */
+  --fill: var(--accent);
+  --fill-2: var(--accent-2);
+  --on-fill: var(--on-accent);
+  --buy: #46a862;
+  --shoot: #ea6f5c;
+  --half: #b5b86a;
+  --warn: #dbad3a;
+  --clean: #4fa7cf;
+  /* текст на заливці акцентом/купівлею/пострілом: на яскравому помаранчевому білий не читався (2.7:1) */
+  --on-accent: #1c1408;
+  --radius: 16px;
+  --tabs-h: 64px;
+  --shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 6px 16px rgb(0 0 0 / .22);
+  color-scheme: dark;
+}
+
+/* Тему ставить data-theme на <html>: скрипт у index.html ще до малювання, потім app.js («Ще → Тема»). */
+:root[data-theme="light"] {
+  /* без чисто білого й чисто чорного: текст ~14:1, як у темній, а не 16,6:1 — інакше ріже очі */
+  --bg: #f1f2ec;
+  --bg-glow: #e8eae1;
+  --surface: #fcfcf9;
+  --surface-2: #eceee6;
+  --seg-on: #ffffff;
+  --line: #dcdfd4;
+  --line-soft: #e7e9e1;
+  --text: #262b23;
+  --muted: #5f675a;
+  /* темний помаранчевий — лише для тексту; кнопки й вибране — яскравий, як у темній, з темним текстом */
+  --accent: #b4570f;
+  --accent-2: #9a490c;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --fill: #ec7f2f;
+  --fill-2: #f3a05c;
+  --on-fill: #1c1408;
+  /* темніші за темну тему: на білому світлі відтінки ледь читались (жовтий — 2:1) */
+  --buy: #26803f;
+  --shoot: #a5321f;
+  --half: #7c7f22;
+  --warn: #7a5600;
+  --clean: #2a7fa6;
+  --on-accent: #fff;
+  --shadow: 0 1px 2px rgb(30 40 25 / .06), 0 6px 16px rgb(30 40 25 / .06);
+  color-scheme: light;
+}
+
+/* Нічна: темна тема, уся сторінка (з фото й прицілом) — яскравістю в червоний канал, щоб не збивати нічний зір */
+:root[data-theme="night"] { --bg: #000; --bg-glow: #000; filter: url(#night-red); }
+/* Монітори-кінескопи (Фосфор — зелений, Бурштин — янтарний, Білий фосфор): як нічна, уся сторінка яскравістю в один колір;
+   свічення, рядки розгортки, заголовки, великі числа, кнопки й вкладки — моноширинним (назви й описи — звичайним, щоб не переносились) */
+:root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) { --bg: #0b0d0b; --bg-glow: #141914; }
+:root[data-theme="phosphor"] { filter: url(#phosphor); }
+:root[data-theme="amber"] { filter: url(#amber); }
+:root[data-theme="white"] { filter: url(#white); }
+:root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) body {
+  text-shadow: 0 0 6px color-mix(in srgb, currentColor 55%, transparent); }
+:root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) :is(.topbar h1, h2, h3, .hero-label, .hero-value,
+  .thumb, .box-toggle, .settings-group > legend, .stat-value, .btn, .chips button, .tabs span) {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Roboto Mono", monospace; }
+:root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) :is(.topbar h1, h3) { text-transform: uppercase; letter-spacing: .06em; }
+:root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) body::after { content: ""; position: fixed; inset: 0;
+  z-index: 2147483647; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(0 0 0 / .22) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse 85% 75% at 50% 50%, transparent 55%, rgb(0 0 0 / .55)); }
+.night-level { margin-top: 12px; }
+.theme-group { margin: 12px 0 6px; }
+/* «Білий фосфор» не влазить у чверть рядка — переноситься на два рядки, а не обрізається трьома крапками */
+.theme-group + .chips.segmented button { white-space: normal; line-height: 1.15; }
+.night-level input { width: 100%; accent-color: var(--accent); }
+
+* { box-sizing: border-box; }
+/* hidden ховає завжди: правило з display у класі (flex, grid) інакше перебиває атрибут */
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(120% 60% at 50% -10%, var(--bg-glow), var(--bg) 60%) fixed, var(--bg);
+  color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom) + 100px);
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+  /* Застосунок вертикальний: якщо щось одне вилізе вбік, сторінка не має роз'їжджатися,
+     інакше нижня панель вкладок з'їжджає з екрана. Де горизонтальна прокрутка потрібна,
+     вона задана на самому блоці (галерея, таблиці довідника, звіт). */
+  overflow-x: clip;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.neg { color: var(--shoot); }
+.pos { color: var(--buy); }
+.zero { color: var(--muted); }
+.warn-text { color: var(--warn); }
+
+/* --- шапка --- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.topbar > * { max-width: 688px; margin-inline: auto; }
+.topbar h1 { margin: 0; font-size: 21px; font-weight: 800; letter-spacing: -.01em; }
+.topbar #subtitle { font-size: 14px; }
+/* Порожній підзаголовок не тримає рядок — шапка нижча, екрану більше місця */
+.topbar #subtitle:empty { display: none; }
+.back-btn[hidden] { display: none; }
+.topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.topbar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.app-icon { width: 30px; height: 30px; flex: none; border-radius: 8px; object-fit: cover; }
+.sync-chip {
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+/* «Скасувати» в шапці: живе до наступної зміни даних. */
+.undo-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line)); border-radius: 16px; background: var(--accent-soft); color: var(--accent-2); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.undo-btn > span:first-child { font-size: 16px; line-height: 1; }
+/* Підтвердження: картка, що змінилася, коротко світиться. */
+.flash { animation: flash 1.1s ease-out; }
+@keyframes flash { 0%, 30% { box-shadow: 0 0 0 2px var(--accent); background-color: var(--accent-soft); } 100% { box-shadow: 0 0 0 2px transparent; } }
+/* Помилки форми — під полем і над кнопками шторки. */
+.field.invalid :is(input, select, textarea), .field.invalid :is(input, select, textarea):focus { border-color: var(--shoot); outline: 1px solid var(--shoot); outline-offset: -1px; }
+.field-error { color: var(--shoot); font-size: 12px; font-weight: 600; }
+.form-error { margin: 0; padding: 8px 16px; color: var(--shoot); font-size: 13px; font-weight: 600; }
+.topbar-actions { display: flex; flex: none; align-items: center; gap: 8px; }
+.gear {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.gear svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+.gear svg path { stroke-width: 2.6; }   /* зубці шестерні товсті — інакше в 21 px це «сонце» */
+#tour-btn svg path { stroke-width: 2; }
+.gear.active { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
+/* Перейшли в налаштування — шестерня провертається на два зубці з доворотом, як механізм */
+#settings-btn.play svg { animation: gear-turn 1.4s cubic-bezier(.3, 0, .2, 1); }
+@keyframes gear-turn { 0% { transform: none; } 60% { transform: rotate(100deg); } 80% { transform: rotate(84deg); } 100% { transform: rotate(90deg); } }
+@media (prefers-reduced-motion: reduce) { #settings-btn.play svg { animation: none; } }
+.sync-chip.idle { color: var(--buy); }
+.sync-chip.auth { color: var(--accent-2); border-color: var(--accent); }
+.sync-chip.error { color: var(--shoot); border-color: var(--shoot); }
+/* Синхронізація йде: три крапки по черзі підстрибують і світлішають */
+.sync-dots { display: inline-flex; gap: 2px; vertical-align: middle; }
+.sync-dots i { width: 3.5px; height: 3.5px; border-radius: 50%; background: currentColor; animation: sync-dot 1s ease-in-out infinite; }
+.sync-dots i:nth-child(2) { animation-delay: .15s; }
+.sync-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes sync-dot { 0%, 80%, 100% { opacity: .3; transform: none; } 40% { opacity: 1; transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .sync-dots i { animation: none !important; } }
+
+.update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px max(16px, calc((100vw - 688px) / 2)) 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+.update button { border: 0; border-radius: 10px; padding: 8px 14px; background: var(--fill); color: var(--on-fill); font-weight: 700; cursor: pointer; }
+
+.view { padding: 14px 16px; max-width: 720px; margin: 0 auto; }
+
+/* --- великий підсумок --- */
+.hero {
+  position: relative;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: linear-gradient(145deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.hero.accent {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 26%, var(--surface)), var(--surface) 70%);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.hero-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.hero-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 44px;
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.hero.accent .hero-value { color: var(--accent-2); }
+
+.thumb {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+/* Заглушка без фото: монограма назви на плитці кольору калібру (--h). */
+.thumb.mono {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, hsl(var(--h) 38% 30%), hsl(var(--h) 40% 16%));
+  border-color: hsl(var(--h) 35% 32%);
+  color: hsl(var(--h) 55% 82%);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: .02em;
+  text-shadow: 0 1px 2px rgb(0 0 0 / .4);
+}
+:root[data-theme="light"] .thumb.mono {
+  background: linear-gradient(160deg, hsl(var(--h) 42% 46%), hsl(var(--h) 44% 32%));
+  border-color: hsl(var(--h) 35% 34%);
+  color: #fff;
+}
+.rows { display: flex; flex-direction: column; gap: 6px; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row-title { font-weight: 600; overflow-wrap: anywhere; }
+.row-qty { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Блок із заголовком на лінії рамки (fieldset + legend, як в 1С). */
+.box { min-width: 0; margin: 16px 0 12px; padding: 4px 12px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.box > legend { padding: 0 6px; margin-left: -4px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--text); }
+.box > .muted:last-child, .box-body > .muted:last-child { margin: 4px 0 0; }
+/* Список «назва — значення» останнім у блоці — без свого відступу: рамка має власний. */
+.box .kv:last-child { margin-bottom: 0; }
+.kv-lead { margin-bottom: 8px; font-weight: 650; overflow-wrap: anywhere; }
+.kv-lead:last-child { margin-bottom: 0; }
+/* Рядки всередині блоку — без власних рамок, розділені лінією: рамка вже є в блоку. */
+.box .rows { gap: 0; }
+.box .row { padding: 10px 2px; border: 0; border-radius: 0; background: none; }
+.box .row + .row { border-top: 1px solid var(--line-soft); }
+/* Згорнутий блок — лише заголовок на лінії, без рамки навколо порожнечі. */
+.box.closed { padding: 0; border-width: 1px 0 0; border-radius: 0; }
+.box.closed > legend { margin-left: 0; padding-left: 0; }
+/* Назва секції на сторінці — на плашці, бо під нею фон із візерунком (у шторках тло суцільне) */
+#view .box > legend { padding: 2px 10px 2px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; }
+.box.closed > .box-body { display: none; }
+/* Кнопка на рамці праворуч: кругла, зі своїм тлом — сидить на лінії, як заголовок ліворуч */
+.box { position: relative; }
+.box > .icon-btn.box-corner {
+  position: absolute;
+  /* центр кнопки — на лінії рамки (середина легенди) */
+  top: -26px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.box > .icon-btn.box-corner svg { width: 16px; height: 16px; }
+.box-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; text-align: left; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.box-chevron { display: inline-block; font-size: 16px; line-height: 1; color: var(--accent-2); transform: rotate(90deg); transition: transform .15s; }
+.box.closed .box-chevron { transform: none; }
+.box-count { padding: 0 7px; border-radius: 9px; background: var(--surface-2); font-weight: 600; letter-spacing: 0; }
+
+/* «Про застосунок»: фото автора ліворуч, текст поруч. */
+.about-head { display: flex; align-items: center; gap: 12px; }
+.about-head h3 { margin: 0 0 2px; }
+.about-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.panel.about .about-links a { padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--text);
+  font-size: 13px; font-weight: 600; text-decoration: none; }
+
+.panel {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.panel h3 { margin: 0 0 10px; font-size: 16px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin: 10px 0; }
+.stat { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.stat .muted { overflow-wrap: anywhere; }
+.stat.accent { background: var(--accent-soft); }
+.stat.accent .stat-value { color: var(--accent-2); }
+.stat-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat-value .nw { white-space: nowrap; }
+.stat-value .unit { margin-left: 1px; font-size: .62em; font-weight: 700; color: var(--muted); }
+
+.empty { text-align: center; padding: 48px 12px; }
+.empty .btn-row { justify-content: center; max-width: 360px; margin: 18px auto 0; }
+.empty .btn-row .btn.primary { flex-basis: 100%; }
+.archive { margin-top: 12px; color: var(--muted); }
+.archive summary { cursor: pointer; padding: 6px 2px; }
+.archive-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; }
+
+.tool-ico { display: inline-grid; place-items: center; width: 26px; height: 26px; vertical-align: middle; border-radius: 50%; background: var(--surface-2); color: var(--text); }
+.tool-ico svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+/* --- кнопки й поля --- */
+.btn {
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  cursor: pointer;
+  font-weight: 650;
+  transition: transform .08s ease, filter .12s ease;
+}
+.btn:active { transform: scale(.98); }
+.btn.primary { background: linear-gradient(180deg, var(--fill-2), var(--fill)); border-color: var(--fill); color: var(--on-fill); }
+/* Кнопки в картках — обведення в колір, фон лише натяком; суцільний колір лишається підтвердженню у шторці (.primary). */
+.btn.buy { background: color-mix(in srgb, var(--buy) 12%, var(--surface-2)); border-color: color-mix(in srgb, var(--buy) 60%, var(--line)); color: color-mix(in srgb, var(--buy) 72%, var(--text)); }
+.btn.shoot { background: color-mix(in srgb, var(--shoot) 12%, var(--surface-2)); border-color: color-mix(in srgb, var(--shoot) 60%, var(--line)); color: color-mix(in srgb, var(--shoot) 72%, var(--text)); }
+.btn.quiet { background: none; border-color: transparent; color: var(--muted); font-weight: 600; }
+.btn.danger { color: var(--shoot); border-color: color-mix(in srgb, var(--shoot) 50%, var(--line)); }
+.btn-ico { display: inline-grid; place-items: center; margin-right: 7px; vertical-align: -4px; }
+.btn-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.check { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; cursor: pointer; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.btn-row .btn { flex: 1 1 auto; }
+.btn-col { display: flex; flex-direction: column; gap: 8px; }
+.btn.with-ico { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn.with-ico .ico { display: grid; }
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.chips button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+}
+.chips button.on { background: var(--fill); border-color: var(--fill); color: var(--on-fill); font-weight: 650; }
+/* Підказки значень під полем (дистанція) — дрібніші за звичайні чипи, щоб не тягнули увагу з поля */
+.chips.chips-sm { gap: 5px; margin-top: 0; }
+.chips.chips-sm button { min-height: 30px; padding: 3px 11px; border-radius: 15px; font-size: 13px; }
+/* Числа (кількість, дистанція) — одним рядком рівної ширини: не переносяться по одному. */
+.chips.chips-num { flex-wrap: nowrap; }
+.chips.chips-num button { flex: 1 1 0; min-width: 0; padding-inline: 2px; }
+.chips.check button.on::before { content: '✓ '; }
+
+.chips.segmented {
+  display: grid;
+  /* minmax(0, 1fr) — інакше колонка не може стати вужчою за свій текст,
+     і на вузькому екрані ряд «День · Тиждень · Місяць · Рік» вилазить за край. */
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 14px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.chips.segmented button { min-height: 44px; min-width: 0; padding: 6px 8px; border: 0; border-radius: 10px;
+  background: transparent; font-weight: 650; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 400px) { .chips.segmented button { font-size: 14px; padding: 6px 4px; } }
+.chips.segmented button.on { background: var(--seg-on); color: var(--text); box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
+.panel .chips.segmented { margin-bottom: 0; }
+
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form > .chips { grid-column: 1 / -1; margin-top: -4px; }
+.form > .check { grid-column: 1 / -1; margin: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; grid-column: 1 / -1; }
+.field.half { grid-column: span 1; min-width: 0; justify-content: flex-end; }
+/* Дата ширша за час: на телефоні вона буває «18 жовт. 2026 р.» і в пів рядка не влазить. */
+.form.when { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.form + .form.when { margin-top: 10px; }
+.field input[type="date"], .field input[type="time"] { min-width: 0; padding-inline: 10px 8px; }
+.field-label { font-size: 13px; color: var(--muted); }
+.field input, .field select, .field textarea, .item-row select, .item-row input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0 0 12px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.kv { align-items: center; }
+/* --- навігація --- */
+.tabs {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* --vv-gap ставить app.js: наскільки видима частина екрана нижча за сторінку
+     (мобільний Chrome із показаним адресним рядком). Без цього панель їде під край. */
+  bottom: var(--vv-gap, 0px);
+  z-index: 10;
+  display: grid;
+  /* Вкладки — не ширші за сторінку (.view 720px): на комп'ютері не розбігаються по краях, фон — на всю ширину */
+  grid-template-columns: repeat(4, minmax(0, 180px));
+  justify-content: center;
+  height: calc(var(--tabs-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line-soft);
+}
+.tabs a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+}
+/* Чотири вкладки замість п'яти — значки й підписи крупніші */
+.tabs svg {
+  width: 64px;
+  height: 34px;
+  padding: 3px 18px;
+  border-radius: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: background .15s ease;
+}
+.tabs a.active { color: var(--accent-2); }
+.tabs a.active svg { background: var(--accent-soft); }
+.fab {
+  position: fixed;
+  right: max(16px, calc((100vw - 720px) / 2 + 16px));
+  bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom) + var(--vv-gap, 0px) + 16px);
+  z-index: 9;
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(160deg, var(--fill-2), var(--fill));
+  color: var(--on-fill);
+  font-size: 30px;
+  line-height: 1;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 40%, rgb(0 0 0 / .4));
+  cursor: pointer;
+  /* --toast-lift ставить toast(): кнопка стає над тостом */
+  translate: 0 calc(-1 * var(--toast-lift, 0px));
+  transition: translate .18s ease, opacity .18s ease;
+}
+/* Гортання вниз — «+» з'їжджає за нижні вкладки */
+.fab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.fab.away { translate: 0 calc(var(--tabs-h) + 80px); opacity: 0; pointer-events: none; }
+.fab:active { transform: scale(.96); }
+
+/* --- шторка й тост --- */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 0);
+  transition: background .18s ease;
+}
+.backdrop.open { background: rgb(0 0 0 / .55); }
+.sheet {
+  width: 100%;
+  max-width: 720px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 22px 22px 0 0;
+  border-top: 1px solid var(--line);
+  transform: translateY(100%);
+  transition: transform .2s cubic-bezier(.2, .8, .2, 1);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.backdrop.open .sheet { transform: none; }
+.sheet:focus { outline: none; }
+/* Картка з великим фото — на весь екран: шапка під вирізом камери, без заокруглення */
+.sheet.full { height: 100dvh; max-height: 100dvh; border-radius: 0; border-top: 0; padding-top: env(safe-area-inset-top); }
+.sheet.full .sheet-grip { display: none; }
+.sheet.full .sheet-body { flex: 1; }
+.sheet-grip { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; }
+.sheet-head h2 { margin: 0; font-size: 19px; font-weight: 800; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.sheet-tools { display: flex; flex: none; gap: 6px; }
+.sheet-lead { display: flex; flex: none; gap: 6px; }
+.sheet-lead + h2 { flex: 1; min-width: 0; }
+.icon-btn.tool { display: grid; place-items: center; color: var(--text); }
+.icon-btn.tool svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.icon-btn.tool.danger { color: var(--shoot); }
+.icon-btn.tool.on { background: var(--accent-soft); color: var(--accent-2); }
+.sheet-body { overflow-y: auto; padding: 4px 16px 12px; }
+.sheet-body h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
+.sheet-actions { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+.sheet-actions .btn { flex: 1; }
+
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom) + var(--vv-gap, 0px) + 12px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #2a3129;
+  color: #f2f5ee;
+  box-shadow: 0 10px 24px rgb(0 0 0 / .35);
+  animation: toast-in .18s ease;
+  touch-action: pan-y;
+  transition: translate .15s ease, opacity .15s ease;
+}
+/* відкрита шторка: тост згори, а не на її кнопках */
+body:has(#layer .backdrop) .toast:not(.reminder) { bottom: auto; top: calc(env(safe-area-inset-top) + 12px); }
+/* тост завжди темний: помаранчевий текст — сталий світлий, а не з теми */
+/* Нагадування — під шторкою (.backdrop — 20): не закриває її кнопки */
+.toast.reminder { z-index: 19; }
+.toast button { min-height: 44px; margin: -10px -6px -10px 0; border: 0; background: none; color: #f3a05c; font-weight: 800; cursor: pointer; padding: 4px 10px; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent-2); font: inherit; text-decoration: underline; cursor: pointer; }
+.ex-more { margin-top: 6px; border-top: 1px solid var(--line-soft); }
+.ex-more > summary { display: flex; align-items: center; min-height: 44px; padding: 4px 0; color: var(--accent-2); font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+.ex-more > summary::-webkit-details-marker { display: none; }
+.ex-more > summary::before { content: '›'; display: inline-block; margin-right: 6px; transition: transform .15s; }
+.ex-more[open] > summary::before { transform: rotate(90deg); }
+
+.changes { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+/* Приблизно в доларах — другим дрібним рядком під сумою (⚙ → «Курс НБУ») */
+.usd { display: block; margin-top: 1px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--muted); }
+
+/* ⚙ Налаштування групами: рамка з назвою на лінії, розділи всередині — через лінію, без окремих карток */
+.settings-group { margin: 22px 0 14px; padding: 2px 16px 4px; background: var(--surface); box-shadow: var(--shadow); border-radius: var(--radius); }
+.settings-group > legend { padding: 0 8px; margin-left: -6px; border-radius: 6px; background: var(--surface); color: var(--accent-2); }
+.settings-group > .panel { margin: 0; padding: 14px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.about-desc { margin: 10px 0; }
+/* рядок налаштувань: іконка · назва · значення › — що де стоїть, видно без розгортання */
+.set-row + .set-row { border-top: 1px solid var(--line-soft); }
+.set-head { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 0; border: 0; background: none;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.set-head .tool-ico { flex: none; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent-2); }
+.set-head .tool-ico svg { width: 19px; height: 19px; }
+.set-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 600; }
+.set-val { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.set-val:empty { display: none; }
+.set-val.ok::before, .set-val.bad::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 6px 1px 0; border-radius: 50%; background: var(--buy); }
+.set-val.bad { color: var(--shoot); }
+.set-val.bad::before { background: var(--shoot); }
+.set-chev { flex: none; width: 14px; color: var(--muted); font-size: 20px; line-height: 1; text-align: center; transition: transform .2s ease; }
+.set-row.open .set-chev { transform: rotate(90deg); }
+.set-row.danger .set-head .tool-ico { background: color-mix(in srgb, var(--shoot) 14%, transparent); color: var(--shoot); }
+.set-row.danger .set-title { color: var(--shoot); font-weight: 500; }
+/* розгортання — висотою сітки 0fr → 1fr: плавно й без підрахунку висоти в JS */
+.set-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
+.set-row.open .set-body { grid-template-rows: 1fr; }
+.set-inner { min-height: 0; overflow: hidden; }
+.set-pane, .set-sub { display: flex; flex-direction: column; gap: 10px; }
+.set-pane { padding: 0 0 16px; }
+.set-pane p, .set-sub p { margin: 0; }
+.set-pane .btn-row, .set-pane .chips.segmented, .set-pane .kv { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .set-body, .set-chev { transition: none; } }
+.settings-group.danger > legend { color: var(--shoot); }
+
+/* Зона дотику ≥ 44 px для дрібних кнопок: вигляд той самий, палець ловить ширше.
+   :where — нульова специфічність, тож власне position кнопки (absolute) не перебивається. */
+:where(.gear, .icon-btn, .box-toggle, .panel.about a, .chips button) { position: relative; }
+:where(.gear, .icon-btn, .box-toggle, .panel.about a, .chips button)::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc(50% - 22px));
+}
+
+/* ---------- FPV Log ---------- */
+.row .thumb { width: 48px; height: 48px; border-radius: 10px; }
+.row.slot { cursor: default; }
+.row.slot .row-main { cursor: pointer; }
+.row.slot .btn { min-height: 36px; padding: 6px 10px; }
+/* Розхідник, якого мало, і батарея, що надто довго заряджена — жовта смуга зліва */
+.row.low { box-shadow: inset 3px 0 0 var(--warn); }
+.row.low .row-qty { color: var(--warn); }
+.banner { display: block; width: 100%; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; text-align: left; cursor: pointer; font-weight: 600; }
+.banner.warn { border: 1px solid var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); color: var(--text); }
+.tabs a.alert span::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 4px; vertical-align: 2px; border-radius: 50%; background: var(--warn); }
+.drone-photo { display: block; width: 100%; max-height: 260px; margin: 0 0 12px; border-radius: 14px; object-fit: cover; cursor: zoom-in; }
+.photo-full { display: block; width: 100%; height: 100%; object-fit: contain; }
+.pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+pre.config { max-height: 60vh; overflow: auto; padding: 10px; border-radius: 10px; background: var(--bg); font-size: 12px; white-space: pre; }
+.copy-box { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.lines { display: flex; flex-direction: column; gap: 10px; }
+.line { padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+.line > .link-btn { margin-top: 8px; font-size: 13px; }
+.bat-states { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+.app-icon.big { width: 48px; height: 48px; border-radius: 12px; }

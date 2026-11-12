@@ -1,0 +1,8 @@
+# Один кінець рядка всюди — LF (у сховищі вже так); картинки не чіпати
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
