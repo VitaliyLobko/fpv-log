@@ -16,7 +16,7 @@
       var pref = 'auto';
       try { pref = localStorage.getItem('fpv-log:theme') || 'auto'; } catch (e) { /* приватний режим */ }
       var light = pref === 'light' || (pref === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
-      document.documentElement.dataset.theme = ['night', 'phosphor', 'amber', 'white'].indexOf(pref) >= 0 ? pref : light ? 'light' : 'dark';
+      document.documentElement.dataset.theme = ['lime', 'night', 'phosphor', 'amber', 'white'].indexOf(pref) >= 0 ? pref : light ? 'light' : 'dark';
     })();
   </script>
   <link rel="stylesheet" href="css/app.css">

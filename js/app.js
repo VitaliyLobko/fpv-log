@@ -1007,7 +1007,7 @@ function onSyncChip() {
 // ---------- тема й мова ----------
 
 // Тема: auto — як у системі. Першу розстановку до малювання робить скрипт в index.html.
-const THEMES = [['auto', 'Авто'], ['dark', 'Темна'], ['light', 'Світла'], ['night', 'Нічна'], ['phosphor', 'Фосфор'], ['amber', 'Бурштин'], ['white', 'Білий фосфор']];
+const THEMES = [['auto', 'Авто'], ['dark', 'Темна'], ['light', 'Світла'], ['lime', 'Лайм'], ['night', 'Нічна'], ['phosphor', 'Фосфор'], ['amber', 'Бурштин'], ['white', 'Білий фосфор']];
 const SPECIAL_THEMES = ['night', 'phosphor', 'amber', 'white'];
 const lightScheme = matchMedia('(prefers-color-scheme: light)');
 

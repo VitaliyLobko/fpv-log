@@ -28,6 +28,22 @@
   color-scheme: dark;
 }
 
+/* Лайм — друга темна тема, кислотна, як рами й гвинти */
+:root[data-theme="lime"] {
+  --bg: #0c0f0a;
+  --bg-glow: #151a12;
+  --surface: #13170f;
+  --surface-2: #1b2116;
+  --seg-on: #283021;
+  --line: #252c1f;
+  --line-soft: #1e241a;
+  --text: #ecf2e4;
+  --muted: #96a08a;
+  --accent: #a3e635;
+  --accent-2: #bef264;
+  --on-accent: #10180a;
+}
+
 /* Тему ставить data-theme на <html>: скрипт у index.html ще до малювання, потім app.js («Ще → Тема»). */
 :root[data-theme="light"] {
   /* без чисто білого й чисто чорного: текст ~14:1, як у темній, а не 16,6:1 — інакше ріже очі */
