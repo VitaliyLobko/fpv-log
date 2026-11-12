@@ -7,7 +7,7 @@ Google Диск. Інфраструктура (база, синхронізац�
 
 **Відкрити:** https://vitaliylobko.github.io/fpv-log/
 
-Інтерфейс — українською або російською, тема — авто, темна, світла, нічна чи «фосфор» (**⚙**).
+Інтерфейс — українською, тема — авто, темна, світла, нічна чи «фосфор» (**⚙**).
 
 ## Встановлення
 
@@ -52,7 +52,7 @@ Google Диск. Інфраструктура (база, синхронізац�
 | `js/db.js` | IndexedDB: drones, items, orders, batteries, flights, wishes, photos, prefs |
 | `js/sync.js`, `js/google-token.js`, `js/config.js` | Google Диск, спільний вхід |
 | `js/ui.js`, `js/photos.js` | елементи інтерфейсу, фото |
-| `js/i18n.js`, `js/ru.js` | мова, російський словник |
+| `js/i18n.js` | `t()` — підстановка параметрів у тексти, порівняння рядків |
 | `js/usd.js`, `js/usd-rates.js` | курс долара НБУ |
 | `js/fcconfig.js` | розбір конфігу Betaflight / INAV |
 | `js/vendor/qrcode.js` | генератор QR (Kazuhiko Arase, MIT) |

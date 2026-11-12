@@ -20,7 +20,6 @@ const ASSETS = [
   './js/google-token.js',
   './js/ui.js',
   './js/i18n.js',
-  './js/ru.js',
   './js/photos.js',
   './js/usd.js',
   './js/usd-rates.js',

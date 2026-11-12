@@ -2,7 +2,7 @@
 // Інфраструктура (база, синхронізація, шторки, теми, «Що нового») — з shooting-log.
 import * as db from './db.js';
 import * as sync from './sync.js';
-import { t, lang, setLang, LANGS, collate, applyStatic, locale } from './i18n.js';
+import { t, collate, locale } from './i18n.js';
 import { prepare as preparePhoto } from './photos.js';
 import { rateOn, refreshRates } from './usd.js';
 import { parseConfig } from './fcconfig.js';
@@ -1495,7 +1495,7 @@ function placeSheet() {
       const name = String(f.values().name ?? '').trim();
       if (name.length < 2) { fieldError(f.inputs.name, t('Введіть назву')); return; }
       try {
-        const list = await searchPlace(name, lang());
+        const list = await searchPlace(name);
         if (!list.length) { fieldError(f.inputs.name, t('Нічого не знайдено — спробуйте інакше написати')); return; }
         found.replaceChildren(...list.map((p) => h('button', { type: 'button', onclick: () => { close(); setPlace(p); } }, p.label)));
       } catch {
@@ -1905,13 +1905,6 @@ function applyTheme() {
 
 lightScheme.addEventListener('change', applyTheme);
 
-function switchLang(code) {
-  setLang(code);
-  applyStatic();
-  renderSyncChip(sync.status);
-  render();
-}
-
 // ---------- що нового ----------
 
 const SEEN_KEY = 'fpv-log:seen-version';
@@ -1929,7 +1922,7 @@ function newer(a, b) {
 
 function changesSheet(list) {
   const close = sheet(t('Що нового'), h('div', {}, list.map((c) => box(`${c.v} · ${fmt.date(c.date)}`,
-    h('ul', { class: 'changes' }, (c[lang()] ?? c.uk).map((x) => h('li', {}, x)))))),
+    h('ul', { class: 'changes' }, c.uk.map((x) => h('li', {}, x)))))),
   { actions: [btn(t('Зрозуміло'), () => close(), 'primary')] });
 }
 
@@ -2081,12 +2074,6 @@ function wipeRow() {
     { danger: true });
 }
 
-function langRow() {
-  const c = chips(Object.entries(LANGS), lang(), switchLang);
-  c.classList.add('segmented');
-  return setRow('lang', 'globe', 'Мова · Язык', LANGS[lang()], c);
-}
-
 function themeRow() {
   const themeChips = (special) => {
     const c = chips(THEMES.filter(([k]) => SPECIAL_THEMES.includes(k) === special).map(([k, label]) => [k, t(label)]), themePref(),
@@ -2144,7 +2131,7 @@ function renderSettings() {
   return h('div', { class: 'settings' },
     settingsGroup(t('Про застосунок'), [aboutPanel()]),
     settingsGroup(t('Дані'), [syncRow(), backupRow(), marnotratRow(), demoRow(), wipeRow()]),
-    settingsGroup(t('Вигляд'), [langRow(), themeRow(), backdropRow()]),
+    settingsGroup(t('Вигляд'), [themeRow(), backdropRow()]),
     settingsGroup(t('Батареї'), [staleRow()]));
 }
 
@@ -2230,7 +2217,6 @@ function registerWorker() {
   });
 }
 
-applyStatic();
 applyTheme();
 $('fab').addEventListener('click', () => VIEWS[tab].fab?.());
 let fabY = window.scrollY;
