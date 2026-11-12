@@ -7,7 +7,7 @@ import { prepare as preparePhoto } from './photos.js';
 import { rateOn, refreshRates } from './usd.js';
 import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
 
-let state = { drones: [], items: [], orders: [], batteries: [], flights: [], photos: [], prefs: [] };
+let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
 let tab = 'drones';
 
 const $ = (id) => document.getElementById(id);
@@ -592,7 +592,7 @@ function configView(d, c) {
 
 // ---------- склад ----------
 
-const STOCK_SEGS = [['units', 'Деталі'], ['cons', 'Розхідники'], ['orders', 'Замовлення']];
+const STOCK_SEGS = [['units', 'Деталі'], ['cons', 'Розхідники'], ['orders', 'Замовлення'], ['wish', 'Хочу']];
 let stockSeg = STOCK_SEGS.some(([k]) => k === recall('fpv-log:stock-seg')) ? recall('fpv-log:stock-seg') : 'units';
 
 const isLow = (it) => it.kind === 'consumable' && num(it.qty) <= num(it.low);
@@ -615,6 +615,11 @@ function renderStock() {
     body = list.length ? h('div', { class: 'rows' }, list.map((o) =>
       row(o.shop || t('Замовлення'), `${fmt.date(o.date)} · ${t('позицій: {n}', { n: o.lines.length })}`, fmt.money(orderTotal(o)), () => orderForm(o), { id: o.id })))
       : empty(t('Замовлень немає'), t('Покупка — це замовлення: магазин, дата, позиції й доставка. Позиції одразу лягають на склад.'));
+  } else if (stockSeg === 'wish') {
+    const list = [...state.wishes].sort((a, b) => collate(a.name, b.name));
+    body = list.length ? h('div', { class: 'rows' }, list.map(wishRow))
+      : empty(t('Список «Хочу купити» порожній'), t('Що придивилися: назва, посилання, орієнтовна ціна й для якого дрона. Одним дотиком — у чернетку замовлення.'),
+        [btn(t('Додати'), () => wishForm(), 'primary add')]);
   } else if (stockSeg === 'cons') {
     const list = state.items.filter((it) => it.kind === 'consumable').sort(byName);
     body = list.length ? h('div', { class: 'rows' }, list.map(itemRow))
@@ -632,10 +637,58 @@ function renderStock() {
 }
 
 function stockAddMenu() {
+  if (stockSeg === 'wish') { wishForm(); return; }
   const close = sheet(t('Додати'), h('div', { class: 'btn-col' },
     btn(t('Замовлення'), () => { close(); orderForm(); }, 'primary'),
     btn(t('Деталь, що вже була'), () => { close(); itemForm(null, { preset: { kind: 'unit' } }); }),
     btn(t('Розхідник'), () => { close(); itemForm(null, { preset: { kind: 'consumable' } }); })));
+}
+
+// ---------- хочу купити ----------
+
+function wishRow(w) {
+  return h('div', { class: 'row slot', dataset: { id: w.id } },
+    h('span', { class: 'row-main', onclick: () => wishForm(w) },
+      h('span', { class: 'row-title' }, w.name),
+      h('span', { class: 'muted small' }, [w.price ? `${fmt.num(w.price)} ${w.currency === 'USD' ? '$' : t('грн')}` : null, findDrone(w.droneId)?.name, w.note].filter(Boolean).join(' · '))),
+    btn(t('У замовлення'), () => wishToOrder(w), 'quiet'));
+}
+
+/** Чернетка замовлення з побажання: магазин — з адреси посилання, позиція — назва й ціна; збереження прибирає побажання. */
+function wishToOrder(w) {
+  let shop = '';
+  try { shop = new URL(w.link).hostname.replace(/^www\./, ''); } catch { /* без посилання */ }
+  orderForm(null, {
+    wishId: w.id, shop, currency: w.currency, note: [w.link, w.note].filter(Boolean).join(' · '),
+    lines: [{ kind: 'unit', cat: 'other', model: w.name, price: w.price, qty: 1 }],
+  });
+}
+
+function wishForm(w = null) {
+  let currency = w?.currency ?? 'UAH';
+  const f = form([
+    { name: 'name', label: t('Що'), value: w?.name, required: true, placeholder: t('напр. DJI O4 Air Unit') },
+    { name: 'link', label: t('Посилання'), value: w?.link, placeholder: 'https://' },
+    { name: 'price', label: t('Орієнтовна ціна'), type: 'number', value: w?.price, half: true },
+    { name: 'droneId', label: t('Для якого дрона'), type: 'select', half: true, value: w?.droneId ?? '',
+      options: [['', '—'], ...[...state.drones].sort((a, b) => collate(a.name, b.name)).map((d) => [d.id, d.name])] },
+    { name: 'note', label: t('Нотатка'), type: 'textarea', rows: 2, value: w?.note },
+  ]);
+  const cur = chips([['UAH', 'грн'], ['USD', '$']], currency, (v) => { currency = v; });
+  cur.classList.add('segmented');
+  const close = sheet(w ? t('Хочу купити') : t('Нове бажання'), h('div', {}, f.el, h('div', { class: 'field-label' }, t('Валюта')), cur), {
+    tools: w ? [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити «{name}»?', { name: w.name }), '', t('Видалити'), async () => {
+      close();
+      await save({ wishes: { del: [w.id] } });
+    }), 'danger')] : [],
+    actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
+      if (invalidField(f)) return;
+      const v = f.values();
+      const rec = { ...(w ?? { id: db.uid(), created: Date.now() }), ...v, droneId: v.droneId || null, currency };
+      close();
+      await save({ wishes: { put: [rec] } }, [rec.id]);
+    }, 'primary')],
+  });
 }
 
 /** Деталь чи розхідник без замовлення («вже було») або правка наявного. onSaved — новий запис (для «Замінити»). */
@@ -785,15 +838,15 @@ function removeItem(it) {
  * у гривнях за курсом дня покупки. Штучна позиція ×N — N окремих деталей; розхідник — одна з кількістю;
  * «дрон чи шолом цілим» на склад не йде — його обирають у картці дрона як покупку.
  */
-function orderForm(o = null) {
+function orderForm(o = null, draft = null) {
   const prevLines = o?.lines ?? [];
-  let currency = o?.currency ?? 'UAH';
+  let currency = o?.currency ?? draft?.currency ?? 'UAH';
   const head = form([
-    { name: 'shop', label: t('Магазин'), value: o?.shop, required: true, half: true },
+    { name: 'shop', label: t('Магазин'), value: o?.shop ?? draft?.shop, required: true, half: true },
     { name: 'date', label: t('Дата'), type: 'dmy', value: o?.date ?? today(), required: true, half: true },
     { name: 'shipping', label: t('Доставка'), type: 'number', value: o?.shipping, half: true },
     { name: 'rate', label: t('Курс, грн за $'), type: 'number', value: o?.rate ?? rateOn(o?.date ?? today()), half: true },
-    { name: 'note', label: t('Примітка'), value: o?.note },
+    { name: 'note', label: t('Примітка'), value: o?.note ?? draft?.note },
   ]);
   const rateField = head.inputs.rate.closest('.field');
   const cur = chips([['UAH', 'грн'], ['USD', '$']], currency, (v) => { currency = v; rateField.hidden = v !== 'USD'; });
@@ -821,7 +874,8 @@ function orderForm(o = null) {
     lines.append(el);
   };
   prevLines.forEach(addLine);
-  if (!prevLines.length) addLine();
+  draft?.lines.forEach(addLine);
+  if (!prevLines.length && !draft) addLine();
   const close = sheet(o ? t('Замовлення') : t('Нове замовлення'), h('div', {},
     h('div', { class: 'field-label' }, t('Валюта')), cur, head.el,
     h('h3', {}, t('Позиції')), lines,
@@ -839,6 +893,8 @@ function orderForm(o = null) {
       };
       try {
         const changes = orderChanges(rec, prevLines);
+        // Куплене з «Хочу купити» зі списку прибирається
+        if (draft?.wishId) changes.wishes = { del: [draft.wishId] };
         close();
         await save(changes, [rec.id]);
       } catch (err) {

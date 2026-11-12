@@ -1112,6 +1112,41 @@
     "broke": "",
     "note": ""
    }
+  ],
+  "wishes": [
+   {
+    "id": "demo-w1",
+    "created": 1,
+    "updated": 1,
+    "name": "DJI O4 Air Unit Pro",
+    "link": "https://www.getfpv.com/dji-o4-air-unit-pro.html",
+    "price": 199,
+    "currency": "USD",
+    "droneId": "demo-quad",
+    "note": "перехід на DJI замість Walksnail?"
+   },
+   {
+    "id": "demo-w2",
+    "created": 1,
+    "updated": 1,
+    "name": "TBS Source One V5 — запасні промені",
+    "link": "",
+    "price": 450,
+    "currency": "UAH",
+    "droneId": "demo-quad",
+    "note": "після падінь у кар’єрі"
+   },
+   {
+    "id": "demo-w3",
+    "created": 1,
+    "updated": 1,
+    "name": "Зарядка ToolkitRC M7",
+    "link": "https://www.toolkitrc.com/m7",
+    "price": 2400,
+    "currency": "UAH",
+    "droneId": null,
+    "note": ""
+   }
   ]
  }
 }

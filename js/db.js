@@ -3,9 +3,9 @@
 // це потрібно, щоб синхронізація з Google Диском зливала зміни без втрат.
 // Файли фото лежать окремо в blobs: вони не входять у JSON синхронізації й резервної копії.
 const DB_NAME = 'fpv-log';
-// 2 — сховище flights (0.1.5); нові сховища створює onupgradeneeded, наявні дані не чіпає
-const DB_VERSION = 2;
-export const STORES = ['drones', 'items', 'orders', 'batteries', 'flights', 'photos', 'prefs'];
+// 2 — сховище flights (0.1.5), 3 — wishes (0.1.8); нові сховища створює onupgradeneeded, наявні дані не чіпає
+const DB_VERSION = 3;
+export const STORES = ['drones', 'items', 'orders', 'batteries', 'flights', 'wishes', 'photos', 'prefs'];
 // prefs — налаштування, спільні для всіх пристроїв (їде з Диском і копією), але не дані: порожня база з ними все одно порожня
 export const DATA_STORES = STORES.filter((s) => s !== 'prefs');
 const ALL = [...STORES, 'tombstones'];
