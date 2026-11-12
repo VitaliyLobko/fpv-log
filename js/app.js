@@ -144,6 +144,10 @@ function checkFw() {
 }
 
 async function save(changes, ids = []) {
+  // Видалена деталь чи побажання — з нею й її фото (запис, файл, копія на Диску), хоч би яким шляхом видалили
+  const gone = new Set(['items', 'wishes'].flatMap((s) => changes[s]?.del ?? []));
+  const orphans = dropPhotos(state.photos.filter((p) => gone.has(p.owner)).map((p) => p.id));
+  for (const k of ['photos', 'blobs']) if (orphans[k]) changes = { ...changes, [k]: { ...changes[k], del: [...(changes[k]?.del ?? []), ...orphans[k].del] } };
   await db.write(changes);
   await refresh();
   confirmed(ids);
@@ -250,9 +254,114 @@ function dropPhotos(ids) {
   return list.length ? { photos: { del: list.map((p) => p.id) }, blobs: { del: list.map((p) => p.id) } } : {};
 }
 
+/** Мініатюра в рядку: тап по ній — фото на весь екран, по решті рядка — картка. Без фото — монограма (fallback) або нічого. */
 function thumbImg(photoId, fallback = '') {
   const p = findPhoto(photoId);
-  return p ? h('img', { class: 'thumb', src: p.thumb, alt: '' }) : h('span', { class: 'thumb mono', style: '--h: 25' }, fallback);
+  if (p) return h('img', { class: 'thumb', src: p.thumb, alt: t('Фото'), onclick: (e) => { e.stopPropagation(); showPhoto(p.id); } });
+  return fallback === null ? null : h('span', { class: 'thumb mono', style: '--h: 25' }, fallback);
+}
+
+// «Знайти фото»: перед переходом у Google запам'ятовуємо форму, куди повернути картинку з «Поділитися»
+const PHOTO_FOR = 'fpv-log:photo-for';
+
+/**
+ * Одне фото до запису: плитка-прев'ю (тап — на весь екран, порожня — вибрати), «Знайти фото» — Google Картинки
+ * за назвою, «Вставити» — скопійоване зображення, «З галереї», «Прибрати»; на комп'ютері ще Ctrl+V і перетягування.
+ * value() → { file, removed } — пишеться разом із формою (photoChanges).
+ */
+function photoPicker(currentId, { file: preset = null, query = () => '', onSearch = null } = {}) {
+  const current = findPhoto(currentId);
+  let file = preset;
+  let removed = Boolean(preset);
+  let url = null;
+  const el = h('div', { class: 'photo-pick' });
+  const take = (f) => {
+    if (!f?.type?.startsWith('image/')) return false;
+    file = f;
+    removed = false;
+    paint();
+    return true;
+  };
+  const input = h('input', { type: 'file', accept: 'image/*', hidden: true, onchange: (e) => { take(e.target.files[0]); e.target.value = ''; } });
+  const search = () => {
+    const q = query().trim();
+    if (!q) { toast(t('Спершу впишіть назву')); return; }
+    onSearch?.();
+    window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}`, '_blank', 'noopener');
+  };
+  const paste = async () => {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((x) => x.startsWith('image/'));
+        if (type) { take(new File([await item.getType(type)], 'clip', { type })); return; }
+      }
+      toast(t('У буфері немає картинки — скопіюйте зображення'));
+    } catch {
+      toast(t('Браузер не дав прочитати буфер — поділіться картинкою в застосунок або збережіть її в галерею'));
+    }
+  };
+  // Ctrl+V, поки форма відкрита; закрилась — слухач знімає себе сам
+  const onPaste = (e) => {
+    if (!el.isConnected) { document.removeEventListener('paste', onPaste); return; }
+    const f = [...(e.clipboardData?.files ?? [])].find((x) => x.type.startsWith('image/'));
+    if (f && take(f)) e.preventDefault();
+  };
+  document.addEventListener('paste', onPaste);
+  function paint() {
+    if (url) URL.revokeObjectURL(url);
+    url = file ? URL.createObjectURL(file) : null;
+    const src = url ?? (removed ? null : current?.thumb);
+    el.replaceChildren(
+      h('button', {
+        type: 'button', class: `photo-pick-thumb ${src ? '' : 'empty'}`, 'aria-label': t('Фото'),
+        // Нове, ще не збережене фото на весь екран не відкриваємо — тап просто вибирає інше
+        onclick: () => (src && !file ? showPhoto(current.id) : input.click()),
+        ondragover: (e) => e.preventDefault(),
+        ondrop: (e) => { e.preventDefault(); take(e.dataTransfer?.files?.[0]); },
+      }, src ? h('img', { src, alt: '' }) : h('span', {}, '+ ', t('Фото'))),
+      h('div', { class: 'photo-pick-acts' },
+        btn(`🔍 ${t('Знайти фото')}`, search, 'mini'),
+        h('div', { class: 'photo-pick-icons' },
+          navigator.clipboard?.read ? toolBtn('paste', t('Вставити'), paste) : null,
+          toolBtn('gallery', t('З галереї'), () => input.click()),
+          src ? toolBtn('delete', t('Прибрати фото'), () => { file = null; removed = true; paint(); }, 'danger') : null)),
+      navigator.clipboard?.read ? h('p', { class: 'muted small photo-pick-hint' },
+        t('У Google: довгий тап на картинці → «Копіювати зображення» → тут'), ' ', toolIcon('paste')) : null,
+      input);
+  }
+  paint();
+  return { el, value: () => ({ file, removed: removed || Boolean(file) }) };
+}
+
+/** Зміни фото запису rec (поле photoId) з value() пікера: нове — записати, старе — прибрати. Повертає [rec, зміни для db.write]. */
+async function photoChanges(rec, change) {
+  if (!change?.removed) return [rec, {}];
+  const old = dropPhotos([rec.photoId].filter(Boolean));
+  const p = change.file ? await newPhoto(change.file, rec.id) : null;
+  return [{ ...rec, photoId: p?.id ?? null }, {
+    photos: { put: p?.photos.put ?? [], del: old.photos?.del ?? [] },
+    blobs: { put: p?.blobs.put ?? [], del: old.blobs?.del ?? [] },
+  }];
+}
+
+/** Картинка, якою поділились у застосунок: service worker кладе її в кеш, тут — відкрити ту саму форму. */
+async function takeSharedImage() {
+  const cache = await caches.open('fpv-log:shared-image');
+  const res = await cache.match('shared');
+  if (!res) return;
+  await cache.delete('shared');
+  const blob = await res.blob();
+  const file = new File([blob], 'shared', { type: blob.type || 'image/jpeg' });
+  const target = readJson(PHOTO_FOR);
+  remember(PHOTO_FOR, '');
+  const open = {
+    item: () => itemForm(findItem(target.id) ?? null, { preset: target.draft ?? {}, file }),
+    wish: () => wishForm(state.wishes.find((x) => x.id === target.id) ?? null, { draft: target.draft, file }),
+    drone: () => droneForm(findDrone(target.id) ?? null, { draft: target.draft, file }),
+  }[target?.kind];
+  if (!open) { toast(t('Відкрийте деталь, побажання чи дрон і натисніть «Знайти фото» — потім поділіться картинкою')); return; }
+  open();
+  toast(t('Картинку отримано — збережіть'));
 }
 
 /** Фото на весь екран: двома пальцями — збільшити, подвійний тап — 1× / 2.5×, змах убік — сусіднє фото зі списку ids. */
@@ -358,15 +467,15 @@ function renderDrones() {
     ground.length ? box(t('Наземка'), h('div', { class: 'rows' }, ground.map(droneRow))) : null);
 }
 
-function droneForm(d = null) {
-  let kind = d?.kind ?? 'self';
+function droneForm(d = null, { draft = null, file = null } = {}) {
+  let kind = d?.kind ?? draft?.kind ?? 'self';
   // Позиції «дрон чи шолом цілим», ще не прив'язані до іншого дрона
   const taken = new Set(state.drones.filter((x) => x.id !== d?.id && boughtLine(x)).map((x) => `${x.buy.orderId}|${x.buy.lineId}`));
   const lines = [...state.orders].sort((a, b) => collate(b.date, a.date)).flatMap((o) => o.lines
     .filter((l) => l.kind === 'drone' && !taken.has(`${o.id}|${l.id}`))
     .map((l) => [`${o.id}|${l.id}`, `${o.shop} · ${[l.brand, l.model].filter(Boolean).join(' ')} · ${fmt.date(o.date)}`]));
   const f = form([
-    { name: 'name', label: t('Назва'), value: d?.name, required: true, placeholder: t('напр. 5″ фристайл') },
+    { name: 'name', label: t('Назва'), value: d?.name ?? draft?.name, required: true, placeholder: t('напр. 5″ фристайл') },
     ...(lines.length ? [{ name: 'buy', label: t('Покупка'), type: 'select', options: [['', t('Ціна вручну')], { group: t('Із замовлення'), options: lines }],
       value: boughtLine(d ?? {}) ? `${d.buy.orderId}|${d.buy.lineId}` : '' }] : []),
     { name: 'price', label: t('Ціна, грн'), type: 'number', value: d?.price, half: true, hint: t('Для BNF чи шолома; деталі рахуються окремо') },
@@ -378,8 +487,12 @@ function droneForm(d = null) {
   hand();
   const kinds = chips(KINDS.map(([k, l]) => [k, t(l)]), kind, (v) => { kind = v; });
   kinds.classList.add('segmented');
+  const pic = photoPicker(d?.photoId, {
+    file, query: () => f.inputs.name.value,
+    onSearch: () => remember(PHOTO_FOR, JSON.stringify({ kind: 'drone', id: d?.id ?? null, draft: d ? null : { ...f.values(), kind } })),
+  });
   const close = sheet(d ? t('Змінити') : t('Новий дрон чи наземка'), h('div', {},
-    d ? null : h('div', { class: 'field-label' }, t('Тип')), d ? null : kinds, f.el), {
+    pic.el, d ? null : h('div', { class: 'field-label' }, t('Тип')), d ? null : kinds, f.el), {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
@@ -392,7 +505,8 @@ function droneForm(d = null) {
           notes: [], configs: [], history: [{ date: today(), text: t('Заведено') }],
         };
       close();
-      await save({ drones: { put: [rec] } }, [rec.id]);
+      const [withPhoto, ph] = await photoChanges(rec, pic.value());
+      await save({ drones: { put: [withPhoto] }, ...ph }, [rec.id]);
       if (!d) droneDetail(rec.id);
     }, 'primary')],
   });
@@ -420,7 +534,7 @@ function droneBody(d) {
       h('div', { class: 'btn-row' }, btn(t('+ Слот'), () => slotForm(d))))),
     h('div', { class: 'btn-row' },
       btn(t('Скопіювати збірку'), () => copyText(buildText(d)), 'primary'),
-      btn(photo ? t('Змінити фото') : t('Фото'), () => pickFile((file) => setDronePhoto(d, file))),
+      btn(photo ? t('Змінити фото') : t('Фото'), () => droneForm(d)),
       btn(t('Нотатка'), () => noteForm(d)),
       btn(t('Конфіг'), () => configForm(d))),
     d.notes?.length ? box(t('Нотатки'), h('div', { class: 'rows' }, [...d.notes].sort((a, b) => collate(b.date, a.date)).map((n) =>
@@ -526,15 +640,6 @@ function slotForm(d) {
   });
 }
 
-async function setDronePhoto(d, file) {
-  const p = await newPhoto(file, d.id);
-  const old = dropPhotos([d.photoId].filter(Boolean));
-  await save({
-    drones: { put: [{ ...findDrone(d.id), photoId: p.id }] },
-    photos: { put: p.photos.put, del: old.photos?.del ?? [] },
-    blobs: { put: p.blobs.put, del: old.blobs?.del ?? [] },
-  }, [d.id]);
-}
 
 function removeDrone(d) {
   confirmSheet(t('Видалити «{name}»?', { name: d.name }), t('Деталі з нього повернуться на склад, нотатки й конфіги зникнуть.'), t('Видалити'), async () => {
@@ -639,9 +744,9 @@ const isLow = (it) => it.kind === 'consumable' && num(it.qty) <= num(it.low);
 function itemRow(it) {
   const where = it.status === 'installed' ? findDrone(it.droneId)?.name : it.status === 'broken' ? it.reason : '';
   if (it.kind === 'consumable') {
-    return row(itemName(it), catLabel(it.cat), `${fmt.num(it.qty)} ${t('шт')}`, () => itemDetail(it.id), { id: it.id, cls: isLow(it) ? 'low' : '' });
+    return row(itemName(it), catLabel(it.cat), `${fmt.num(it.qty)} ${t('шт')}`, () => itemDetail(it.id), { id: it.id, cls: isLow(it) ? 'low' : '', thumb: thumbImg(it.photoId, null) });
   }
-  return row(itemName(it), [catLabel(it.cat), it.fw, fwHint(it), where].filter(Boolean).join(' · '), it.price ? fmt.money(it.price) : '', () => itemDetail(it.id), { id: it.id });
+  return row(itemName(it), [catLabel(it.cat), it.fw, fwHint(it), where].filter(Boolean).join(' · '), it.price ? fmt.money(it.price) : '', () => itemDetail(it.id), { id: it.id, thumb: thumbImg(it.photoId, null) });
 }
 
 // Відбір за дроном у «Хочу» й журналі польотів: «Усі» + дрони, що є в списку; спільний вибір, пам'ятається
@@ -713,6 +818,7 @@ function stockAddMenu() {
 
 function wishRow(w) {
   return h('div', { class: 'row slot', dataset: { id: w.id } },
+    thumbImg(w.photoId, null),
     h('span', { class: 'row-main', onclick: () => wishForm(w) },
       h('span', { class: 'row-title' }, w.name),
       h('span', { class: 'muted small' }, [w.price ? `${fmt.num(w.price)} ${w.currency === 'USD' ? '$' : t('грн')}` : null, findDrone(w.droneId)?.name, w.note].filter(Boolean).join(' · '))),
@@ -729,19 +835,24 @@ function wishToOrder(w) {
   });
 }
 
-function wishForm(w = null) {
-  let currency = w?.currency ?? 'UAH';
+function wishForm(w = null, { draft = null, file = null } = {}) {
+  const src = w ?? draft;
+  let currency = src?.currency ?? 'UAH';
   const f = form([
-    { name: 'name', label: t('Що'), value: w?.name, required: true, placeholder: t('напр. DJI O4 Air Unit') },
-    { name: 'link', label: t('Посилання'), value: w?.link, placeholder: 'https://' },
-    { name: 'price', label: t('Орієнтовна ціна'), type: 'number', value: w?.price, half: true },
-    { name: 'droneId', label: t('Для якого дрона'), type: 'select', half: true, value: w?.droneId ?? '',
+    { name: 'name', label: t('Що'), value: src?.name, required: true, placeholder: t('напр. DJI O4 Air Unit') },
+    { name: 'link', label: t('Посилання'), value: src?.link, placeholder: 'https://' },
+    { name: 'price', label: t('Орієнтовна ціна'), type: 'number', value: src?.price, half: true },
+    { name: 'droneId', label: t('Для якого дрона'), type: 'select', half: true, value: src?.droneId ?? '',
       options: [['', '—'], ...[...state.drones].sort((a, b) => collate(a.name, b.name)).map((d) => [d.id, d.name])] },
-    { name: 'note', label: t('Нотатка'), type: 'textarea', rows: 2, value: w?.note },
+    { name: 'note', label: t('Нотатка'), type: 'textarea', rows: 2, value: src?.note },
   ]);
   const cur = chips([['UAH', 'грн'], ['USD', '$']], currency, (v) => { currency = v; });
   cur.classList.add('segmented');
-  const close = sheet(w ? t('Хочу купити') : t('Нове бажання'), h('div', {}, f.el, h('div', { class: 'field-label' }, t('Валюта')), cur), {
+  const pic = photoPicker(w?.photoId, {
+    file, query: () => f.inputs.name.value,
+    onSearch: () => remember(PHOTO_FOR, JSON.stringify({ kind: 'wish', id: w?.id ?? null, draft: w ? null : { ...f.values(), currency } })),
+  });
+  const close = sheet(w ? t('Хочу купити') : t('Нове бажання'), h('div', {}, pic.el, f.el, h('div', { class: 'field-label' }, t('Валюта')), cur), {
     tools: w ? [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити «{name}»?', { name: w.name }), '', t('Видалити'), async () => {
       close();
       await save({ wishes: { del: [w.id] } });
@@ -751,27 +862,40 @@ function wishForm(w = null) {
       const v = f.values();
       const rec = { ...(w ?? { id: db.uid(), created: Date.now() }), ...v, droneId: v.droneId || null, currency };
       close();
-      await save({ wishes: { put: [rec] } }, [rec.id]);
+      const [withPhoto, ph] = await photoChanges(rec, pic.value());
+      await save({ wishes: { put: [withPhoto] }, ...ph }, [rec.id]);
     }, 'primary')],
   });
 }
 
 /** Деталь чи розхідник без замовлення («вже було») або правка наявного. onSaved — новий запис (для «Замінити»). */
-function itemForm(it = null, { preset = {}, onSaved = null } = {}) {
-  const kind = it?.kind ?? preset.kind ?? 'unit';
+/** preset — поля нової деталі (категорія з «Замінити» чи чернетка, з якою пішли шукати фото); file — картинка з «Поділитися». */
+function itemForm(it = null, { preset = {}, onSaved = null, file = null } = {}) {
+  const src = it ?? preset;
+  const kind = src.kind ?? 'unit';
   const cons = kind === 'consumable';
   const fields = [
-    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(), value: it?.cat ?? preset.cat ?? (cons ? 'props' : 'other') },
-    { name: 'brand', label: t('Бренд'), value: it?.brand, half: true },
-    { name: 'model', label: t('Модель'), value: it?.model, half: true, required: true },
-    { name: 'specs', label: t('Характеристики'), type: 'textarea', rows: 2, value: it?.specs },
+    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(), value: src.cat ?? (cons ? 'props' : 'other') },
+    { name: 'brand', label: t('Бренд'), value: src.brand, half: true },
+    { name: 'model', label: t('Модель'), value: src.model, half: true, required: true },
+    { name: 'specs', label: t('Характеристики'), type: 'textarea', rows: 2, value: src.specs },
   ];
-  if (cons) fields.push({ name: 'qty', label: t('Кількість'), type: 'number', value: it?.qty ?? 1, half: true }, { name: 'low', label: t('Поріг «мало»'), type: 'number', value: it?.low ?? 0, half: true });
-  else if (!it) fields.push({ name: 'fw', label: t('Прошивка'), placeholder: 'Betaflight 4.5.1' });
-  if (!it?.orderId) fields.push({ name: 'price', label: t('Ціна, грн'), type: 'number', value: it?.price, half: true }, { name: 'buyDate', label: t('Куплено'), type: 'dmy', value: it?.buyDate, half: true });
+  if (cons) fields.push({ name: 'qty', label: t('Кількість'), type: 'number', value: src.qty ?? 1, half: true }, { name: 'low', label: t('Поріг «мало»'), type: 'number', value: src.low ?? 0, half: true });
+  else if (!it) fields.push({ name: 'fw', label: t('Прошивка'), placeholder: 'Betaflight 4.5.1', value: src.fw });
+  if (!it?.orderId) fields.push({ name: 'price', label: t('Ціна, грн'), type: 'number', value: src.price, half: true }, { name: 'buyDate', label: t('Куплено'), type: 'dmy', value: src.buyDate, half: true });
   const f = form(fields);
+  const name = () => `${f.inputs.brand.value} ${f.inputs.model.value}`.trim();
+  // Характеристики — з сайту виробника чи магазину: пошук у Google за брендом і моделлю, текст вставляють у поле
+  f.inputs.specs.closest('.field').after(h('div', { class: 'specs-find' }, btn(`🔍 ${t('Характеристики')}`, () => {
+    if (!name()) { toast(t('Спершу впишіть назву')); return; }
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(`${name()} ${t('характеристики')}`)}`, '_blank', 'noopener');
+  }, 'mini')));
+  const pic = photoPicker(it?.photoId, {
+    file, query: name,
+    onSearch: () => remember(PHOTO_FOR, JSON.stringify({ kind: 'item', id: it?.id ?? null, draft: it ? null : { ...f.values(), kind } })),
+  });
   const close = sheet(it ? t('Змінити') : cons ? t('Розхідник') : t('Деталь, що вже була'), h('div', {},
-    it?.orderId ? h('p', { class: 'muted small' }, t('Ціна й дата — із замовлення.')) : null, f.el), {
+    pic.el, it?.orderId ? h('p', { class: 'muted small' }, t('Ціна й дата — із замовлення.')) : null, f.el), {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
@@ -781,7 +905,8 @@ function itemForm(it = null, { preset = {}, onSaved = null } = {}) {
       };
       if (cons) { rec.qty = num(v.qty); rec.low = num(v.low); }
       close();
-      await save({ items: { put: [rec] } }, [rec.id]);
+      const [withPhoto, ph] = await photoChanges(rec, pic.value());
+      await save({ items: { put: [withPhoto] }, ...ph }, [rec.id]);
       if (!it) onSaved?.(rec);
     }, 'primary')],
   });
@@ -799,6 +924,7 @@ function itemBody(it) {
   const o = it.orderId ? findOrder(it.orderId) : null;
   const drone = it.status === 'installed' ? findDrone(it.droneId) : null;
   const cons = it.kind === 'consumable';
+  const photo = findPhoto(it.photoId);
   const actions = cons ? [btn(t('Списати'), () => qtySheet(it, -1)), btn(t('Додати'), () => qtySheet(it, 1))]
     : it.status === 'installed' ? []
       : [btn(t('Прошивка'), () => fwSheet(it)),
@@ -806,6 +932,7 @@ function itemBody(it) {
         it.status !== 'broken' ? btn(t('Зламана'), () => brokenSheet(it)) : null,
         it.status !== 'sold' ? btn(t('Продано / списано'), () => soldSheet(it)) : null];
   return h('div', {},
+    photo ? h('img', { class: 'drone-photo', src: photo.thumb, alt: '', onclick: () => showPhoto(photo.id) }) : null,
     kv([
       [t('Категорія'), catLabel(it.cat)],
       cons ? [t('Кількість'), h('span', { class: isLow(it) ? 'warn-text' : '' }, `${fmt.num(it.qty)} ${t('шт')}${isLow(it) ? ` · ${t('мало')}` : ''}`)] : [t('Стан'), t(STATUS[it.status ?? 'stock'])],
@@ -2084,6 +2211,11 @@ try {
   throw err;
 }
 route();
+// «Поділитися» → FPV Log: service worker відкрив ?go=shared — забрати картинку; параметр прибираємо, щоб оновлення не повторило
+if (new URLSearchParams(location.search).get('go') === 'shared') {
+  history.replaceState(history.state, '', location.pathname + location.hash);
+  takeSharedImage().catch((err) => toast(err.message));
+}
 showNews();
 setTimeout(backupReminder, 1500);
 sync.onStatus(renderSyncChip);
