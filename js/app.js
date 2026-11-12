@@ -20,7 +20,7 @@ const $ = (id) => document.getElementById(id);
 const CATS = [
   ['frame', 'Рама'], ['motors', 'Мотори'], ['fc', 'Політник'], ['esc', 'Регулятор'], ['stack', 'Стек FC+ESC'], ['aio', 'AIO (FC+ESC+RX)'],
   ['vtx', 'VTX'], ['camera', 'Камера'], ['rx', 'Приймач'], ['gps', 'GPS'], ['antenna', 'Антена'], ['props', 'Пропелери'],
-  ['vrx', 'Модуль VRX'], ['txmodule', 'Модуль пульта'], ['gbattery', 'Батарея шолома'], ['charger', 'Зарядка'], ['tool', 'Інструмент'], ['other', 'Інше'],
+  ['vrx', 'Модуль VRX (відеоприймач)'], ['txmodule', 'Модуль пульта'], ['gbattery', 'Батарея шолома'], ['charger', 'Зарядка'], ['tool', 'Інструмент'], ['other', 'Інше'],
 ];
 const catLabel = (k) => t(CATS.find(([c]) => c === k)?.[1] ?? 'Інше');
 const catOptions = () => CATS.map(([k, l]) => [k, t(l)]);
@@ -687,6 +687,8 @@ function replaceSheet(droneId, slotId, preset = {}) {
   const close = sheet(`${t('Замінити')}: ${slotLabel(s)}`, h('div', {},
     cur ? kv([[t('Зараз'), itemName(cur)]]) : null,
     h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('Нова деталь')), select),
+    fits.length ? null : h('p', { class: 'muted small' }, cur ? t('На складі немає вільних деталей «{cat}»: додайте нову або лиште «— порожньо —», щоб просто зняти поточну.', { cat: catLabel(s.cat) })
+      : t('На складі немає вільних деталей «{cat}» — додайте нову кнопкою нижче.', { cat: catLabel(s.cat) })),
     h('div', { class: 'btn-row' }, btn(t('+ Нова деталь'), () => {
       close();
       itemForm(null, { preset: { cat: s.cat }, onSaved: (it) => replaceSlot(droneId, slotId, it.id, 'stock', '') });
@@ -718,6 +720,7 @@ async function replaceSlot(droneId, slotId, newId, outcome, reason, flightId = n
   const text = `${slotLabel(s)}: ${old ? itemName(old) : '—'} → ${nw ? itemName(nw) : '—'}${old && outcome === 'broken' ? ` (${t('зламана')}: ${reason})` : ''}`;
   const drone = logged({ ...d, slots: d.slots.map((x) => (x.id === slotId ? { ...x, itemId: newId || null } : x)) }, text);
   await save({ drones: { put: [drone] }, items: { put } }, [d.id, ...put.map((x) => x.id)]);
+  if (old) toast(`${text} · ${outcome === 'broken' ? t('знята — у «Зламаний»') : t('знята — на складі')}`);
 }
 
 function slotForm(d) {
@@ -738,11 +741,13 @@ function slotForm(d) {
 
 
 function removeDrone(d) {
-  confirmSheet(t('Видалити «{name}»?', { name: d.name }), t('Деталі з нього повернуться на склад, нотатки й конфіги зникнуть.'), t('Видалити'), async () => {
+  const wishes = wishesOf(d);
+  confirmSheet(t('Видалити «{name}»?', { name: d.name }), [t('Деталі з нього повернуться на склад, нотатки й конфіги зникнуть. Польоти лишаться в журналі й статистиці.'),
+    wishes.length ? t('Побажання для нього ({n}) перейдуть у «Без дрона».', { n: wishes.length }) : null].filter(Boolean).join(' '), t('Видалити'), async () => {
     const items = d.slots.map((s) => findItem(s.itemId)).filter(Boolean)
       .map((it) => logged({ ...it, status: 'stock', droneId: null }, t('Знято з «{d}» (дрон видалено)', { d: d.name })));
     const ph = dropPhotos([d.photoId, ...(d.notes ?? []).map((n) => n.photoId)].filter(Boolean));
-    await save({ drones: { del: [d.id] }, items: { put: items }, ...ph });
+    await save({ drones: { del: [d.id] }, items: { put: items }, wishes: { put: wishesOf(d).map((w) => ({ ...w, droneId: null })) }, ...ph });
     toast(t('Видалено'));
   });
 }
@@ -783,7 +788,7 @@ function configForm(d) {
   const f = form([
     { name: 'name', label: t('Назва'), placeholder: 'Betaflight 4.5 · diff all', half: true },
     { name: 'date', label: t('Дата'), type: 'dmy', value: today(), half: true, required: true },
-    { name: 'text', label: t('Текст (diff all / dump)'), type: 'textarea', rows: 10, required: true },
+    { name: 'text', label: t('Текст (diff all / dump)'), type: 'textarea', rows: 10, required: true, hint: t('Betaflight чи INAV Configurator → CLI → команда diff all → скопіюйте відповідь сюди.') },
   ]);
   const close = sheet(t('Конфіг'), f.el, {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
@@ -1189,6 +1194,7 @@ function orderForm(o = null, draft = null) {
   draft?.lines.forEach(addLine);
   if (!prevLines.length && !draft) addLine();
   const close = sheet(o ? t('Замовлення') : t('Нове замовлення'), h('div', {},
+    draft?.wishId ? h('p', { class: 'muted small' }, t('Купили «{name}»? Перевірте магазин, ціну й категорію та збережіть: позиція ляже на склад, а з «Хочу» зникне.', { name: draft.lines[0]?.model ?? '' })) : null,
     h('div', { class: 'field-label' }, t('Валюта')), cur, head.el,
     h('h3', {}, t('Позиції')), lines,
     h('div', { class: 'btn-row' }, btn(t('+ Позиція'), () => addLine()))), {
@@ -1209,6 +1215,7 @@ function orderForm(o = null, draft = null) {
         if (draft?.wishId) changes.wishes = { del: [draft.wishId] };
         close();
         await save(changes, [rec.id]);
+        if (draft?.wishId) toast(t('«{name}» — на складі, з «Хочу» прибрано. Поставити на дрон — «Замінити» в його картці.', { name: draft.lines[0]?.model ?? '' }));
       } catch (err) {
         formError(err.message);
       }
@@ -1383,6 +1390,7 @@ function batteryBody(b) {
     h('p', { class: 'card-sum' }, [t('циклів: {n}', { n: b.cycles?.length ?? 0 }), t('у цьому стані {n} дн.', { n: days })].join(' · ')),
     h('p', { class: 'muted small card-sub' }, [b.connector, b.price ? fmt.money(b.price) : null, b.buyDate ? t('куплено {date}', { date: fmt.date(b.buyDate) }) : null].filter(Boolean).join(' · ')),
     states,
+    h('p', { class: 'muted small' }, t('Цикл — один заряд. Політ у журналі додає цикл сам, а сьогоднішній ще й ставить «Розряджена»; «+ цикл» — для зарядів поза журналом. «Заряджена» понад {n} дн. — нагадаю про зберігання.', { n: staleDays() })),
     h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary')),
     irBox(b),
     b.cycles?.length ? fold('bat-cycles', t('Цикли · {n}', { n: b.cycles.length }), h('ul', { class: 'changes' }, [...b.cycles].reverse().map((c) => h('li', {},
@@ -1419,7 +1427,7 @@ function irBox(b) {
   }
   // Зверху — головне (середній IR, найгірша банка, тривога); графік і банки — під згорткою
   const worst = last.indexOf(Math.max(...last));
-  return box(t('IR, мОм'), h('div', {},
+  return box(t('Внутрішній опір (IR), мОм'), h('div', {},
     h('p', { class: 'card-sum' }, t('середній {a} · найгірша банка {n}: {w}', { a: f1(last.reduce((n, x) => n + x, 0) / last.length), n: worst + 1, w: f1(last[worst]) }),
       h('span', { class: 'muted small' }, ` · ${fmt.date(pts.at(-1).date)}`)),
     last.some(bad) ? h('p', { class: 'warn-text small' }, t('Банка {n}: IR понад 1,5× медіани пакета ({m} мОм) — стежте за нею', { n: last.map((v, i) => (bad(v) ? i + 1 : null)).filter(Boolean).join(', '), m: f1(median) })) : null,
@@ -1516,7 +1524,7 @@ function renderStats() {
       stat(t('Наліт'), fmtMin(mins)),
       stat(t('Хвилина польоту'), mins ? fmt.money(invested() / mins) : '—', 'accent'),
       stat(t('Ремонт (зламане)'), fmt.uah(repair))),
-    h('p', { class: 'muted small' }, t('Хвилина польоту — «Вкладено в хобі» ({sum}), поділене на хвилини нальоту.', { sum: fmt.money(invested()) })),
+    h('p', { class: 'muted small' }, t('Хвилина польоту — «Вкладено в хобі» ({sum}), поділене на хвилини нальоту. Ремонт — ціна деталей, що зараз позначені зламаними.', { sum: fmt.money(invested()) })),
     box(t('Наліт за місяцями'), bars(months, fmtMin)),
     box(t('Наліт за дронами'), bars(byDrone, fmtMin)));
 }
@@ -1635,7 +1643,7 @@ function renderPreflight() {
       h('p', { class: 'muted small' }, t('Пороги на найближчі 3 години (жовтий / червоний): вітер на 10 м {w} м/с, пориви {g} м/с, опади {r} мм/год, Kp {k}; мороз — жовтий (LiPo гріти).',
         { w: LIMITS.wind.join(' / '), g: LIMITS.gust.join(' / '), r: LIMITS.rain.map(fmt.num).join(' / '), k: LIMITS.kp.join(' / ') })))));
   } else {
-    weather = h('p', { class: 'muted' }, !place ? t('Виберіть місце — з телефона чи назвою: буде вітер на висотах, пориви, опади й Kp.')
+    weather = h('p', { class: 'muted' }, !place ? t('Виберіть місце — з телефона чи назвою: буде вітер на висотах, пориви, опади й Kp (магнітна буря: GPS і компас можуть брехати).')
       : preLoading ? t('Завантажую погоду…') : t('Погоди ще немає — потрібен інтернет.'));
   }
   const ticks = readJson(PRE_TICKS);
@@ -1684,7 +1692,7 @@ function flightForm(f = null) {
     const bf = form([
       { name: 'batteryId', label: t('Батарея'), type: 'select', options: [['', t('Без номера')], ...usable.map((b) => [b.id, batTitle(b)])],
         value: x.batteryId !== undefined ? x.batteryId ?? '' : usable.find((b) => !used.includes(b.id))?.id ?? '' },
-      { name: 'min', label: t('Хвилин'), type: 'number', value: x.min, half: true, required: true },
+      { name: 'min', label: t('Хвилин у повітрі'), type: 'number', value: x.min, half: true, required: true },
     ]);
     const entry = { f: bf };
     const el = h('div', { class: 'line' }, bf.el, h('button', { type: 'button', class: 'link-btn', onclick: () => { batForms.splice(batForms.indexOf(entry), 1); el.remove(); } }, t('Прибрати')));
@@ -1711,7 +1719,8 @@ function flightForm(f = null) {
   const close = sheet(f ? t('Політ') : t('Новий політ'), h('div', {},
     head.el, h('datalist', { id: 'places' }, places.map((p) => h('option', { value: p }))),
     h('div', { class: 'field-label' }, t('Тип')), types,
-    h('h3', {}, t('Батареї')), bats, h('div', { class: 'btn-row' }, btn(t('+ Батарея'), () => addBat())),
+    h('h3', {}, t('Батареї')), f ? null : h('p', { class: 'muted small' }, t('Кожна батарея отримає цикл, дрон — наліт; політ за сьогодні переведе батареї в «Розряджена».')),
+    bats, h('div', { class: 'btn-row' }, btn(t('+ Батарея'), () => addBat())),
     h('div', { class: 'field-label' }, t('Падіння')), crashChips, crashForm.el, note.el), {
     tools: f ? [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити політ?'), t('Цикли батарей із цього польоту теж приберуться.'), t('Видалити'), async () => {
       close();
@@ -1933,10 +1942,11 @@ function renderSyncChip(s) {
   if (CHIP[s.state]) {
     const text = CHIP[s.state]();
     chip.replaceChildren(icon('cloud'), text);
-    chip.setAttribute('aria-label', `${t('Google Диск')}: ${text || t('синхронізація…')}`);
+    const label = s.state === 'idle' ? t('Google Диск: остання синхронізація {when}', { when: syncTime(s.lastSync) }) : `${t('Google Диск')}: ${text || t('синхронізація…')}`;
+    chip.setAttribute('aria-label', label);
     if (s.state === 'syncing') chip.append(h('span', { class: 'sync-dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')));
     chip.className = `sync-chip ${s.state}`;
-    chip.title = s.message || t('Синхронізація з Google Диском');
+    chip.title = s.message || label;
   }
   // Поки людина щось вписує в ⚙ (Марнотрат, дні), статус синхронізації не перебудовує екран — введене не зникне
   if (tab === 'settings' && !document.activeElement?.matches('#view input, #view textarea, #view select')) render();
@@ -1946,7 +1956,10 @@ function onSyncChip() {
   const { state: st, message } = sync.status;
   if (st === 'auth') connectGoogle();
   else if (st === 'offline') toast(t('Немає інтернету — синхронізація відбудеться, коли з’явиться зв’язок'));
-  else if (st === 'error') { toast(message || t('Помилка синхронізації')); sync.syncNow(); } else sync.syncNow();
+  else if (st === 'error') { toast(message || t('Помилка синхронізації')); sync.syncNow(); } else {
+    if (st === 'idle') toast(t('Google Диск: остання синхронізація {when} — перевіряю ще раз', { when: syncTime(sync.status.lastSync) }));
+    sync.syncNow();
+  }
 }
 
 // ---------- тема й мова ----------
@@ -2201,7 +2214,7 @@ function backdropRow() {
 
 function staleRow() {
   const input = h('input', { type: 'number', min: '1', max: '30', inputmode: 'numeric', value: String(staleDays()) });
-  return setRow('stale', 'battery', t('Заряджена довше'), t('{n} дн.', { n: staleDays() }), [
+  return setRow('stale', 'battery', t('Нагадати про заряджені'), t('через {n} дн.', { n: staleDays() }), [
     h('p', { class: 'muted small' }, t('Плашка нагадає перевести батарею в зберігання, якщо вона «заряджена» довше стількох днів.')),
     h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('Днів')), input),
     h('div', { class: 'btn-row' }, btn(t('Зберегти'), () => {
