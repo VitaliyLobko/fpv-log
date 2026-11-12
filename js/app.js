@@ -1116,8 +1116,43 @@ function batteryBody(b) {
       [t('Циклів'), String(b.cycles?.length ?? 0)], [t('У цьому стані'), t('{n} дн.', { n: days })]]),
     h('div', { class: 'field-label' }, t('Стан')), states,
     h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary')),
+    irBox(b),
     b.cycles?.length ? box(t('Цикли'), h('ul', { class: 'changes' }, [...b.cycles].reverse().map((c) => h('li', {},
       [fmt.date(c.date), c.flightId && t('політ'), c.v && `${c.v} ${t('В/банку')}`, c.ir && `IR ${c.ir} ${t('мОм')}`].filter(Boolean).join(' · '))))) : null);
+}
+
+/** IR банок із рядка «4, 4, 5, 4» — мОм, лише додатні числа. */
+const irCells = (s) => String(s ?? '').split(/[\s,;/]+/).map(Number).filter((x) => x > 0);
+
+/** IR: лінії середнього й найгіршої банки за циклами, де його міряли, і останні значення по банках. */
+function irBox(b) {
+  const pts = (b.cycles ?? []).map((c) => ({ date: c.date, cells: irCells(c.ir) })).filter((p) => p.cells.length)
+    .map((p) => ({ ...p, avg: p.cells.reduce((n, x) => n + x, 0) / p.cells.length, max: Math.max(...p.cells) }));
+  if (!pts.length) return null;
+  const last = pts.at(-1).cells;
+  const sorted = [...last].sort((x, y) => x - y);
+  const median = (sorted[(sorted.length - 1) >> 1] + sorted[sorted.length >> 1]) / 2;
+  // Банка з IR понад півтори медіани пакета — перша ознака, що вона здає
+  const bad = (v) => last.length > 1 && v > 1.5 * median;
+  const f1 = (v) => fmt.num(Math.round(v * 10) / 10);
+  let chart = null;
+  if (pts.length > 1) {
+    const lo = Math.min(...pts.map((p) => p.avg));
+    const hi = Math.max(...pts.map((p) => p.max));
+    const x = (i) => ((i * 100) / (pts.length - 1)).toFixed(2);
+    const y = (v) => (37 - ((v - lo) / (hi - lo || 1)) * 34).toFixed(2);
+    const line = (key, cls) => `<polyline class="${cls}" points="${pts.map((p, i) => `${x(i)},${y(p[key])}`).join(' ')}"/>`;
+    const svg = h('div', { class: 'ir-plot' });
+    svg.innerHTML = `<svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">${line('max', 'ir-max')}${line('avg', 'ir-avg')}</svg>`;
+    chart = h('div', { class: 'ir-chart', role: 'img', 'aria-label': t('IR: середній {a} → {b} мОм', { a: f1(pts[0].avg), b: f1(pts.at(-1).avg) }) },
+      h('div', { class: 'ir-y muted small' }, h('span', {}, f1(hi)), h('span', {}, f1(lo))), svg,
+      h('div', { class: 'ir-x muted small' }, h('span', {}, fmt.date(pts[0].date)), h('span', {}, fmt.date(pts.at(-1).date))),
+      h('div', { class: 'ir-legend small' }, h('span', { class: 'ir-avg' }, t('середній')), h('span', { class: 'ir-max' }, t('найгірша банка'))));
+  }
+  return box(t('IR, мОм'), h('div', {}, chart,
+    h('div', { class: 'field-label' }, t('Останній замір по банках · {date}', { date: fmt.date(pts.at(-1).date) })),
+    h('div', { class: 'ir-cells' }, last.map((v, i) => h('span', { class: `ir-cell${bad(v) ? ' bad' : ''}` }, h('small', {}, String(i + 1)), f1(v)))),
+    last.some(bad) ? h('p', { class: 'warn-text small' }, t('Банка {n}: IR понад 1,5× медіани пакета ({m} мОм) — стежте за нею', { n: last.map((v, i) => (bad(v) ? i + 1 : null)).filter(Boolean).join(', '), m: f1(median) })) : null));
 }
 
 function cycleSheet(b) {

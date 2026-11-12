@@ -738,3 +738,19 @@ pre.config { max-height: 60vh; overflow: auto; padding: 10px; border-radius: 10p
   .label-qr { flex: none; width: 21mm; height: 21mm; }
   .label-qr svg { width: 100%; height: 100%; display: block; }
 }
+
+/* IR батареї: дві лінії (середній і найгірша банка) та останні значення по банках */
+.ir-chart { display: grid; grid-template-columns: auto 1fr; gap: 2px 6px; margin-bottom: 8px; }
+.ir-y { display: flex; flex-direction: column; justify-content: space-between; text-align: right; font-variant-numeric: tabular-nums; }
+.ir-plot svg { display: block; width: 100%; height: 120px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ir-plot polyline { fill: none; stroke-width: 2.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+polyline.ir-avg { stroke: var(--accent); }
+polyline.ir-max { stroke: var(--warn); stroke-dasharray: 5 4; }
+.ir-x, .ir-legend { grid-column: 2; display: flex; justify-content: space-between; gap: 12px; }
+.ir-legend { justify-content: flex-start; }
+span.ir-avg::before, span.ir-max::before { content: ""; display: inline-block; width: 14px; height: 3px; margin-right: 5px; vertical-align: middle; background: var(--accent); }
+span.ir-max::before { background: var(--warn); }
+.ir-cells { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.ir-cell { display: flex; flex-direction: column; align-items: center; min-width: 40px; padding: 4px 8px; border-radius: 10px; background: var(--surface-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ir-cell small { font-weight: 500; color: var(--muted); }
+.ir-cell.bad { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
