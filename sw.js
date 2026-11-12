@@ -72,12 +72,14 @@ self.addEventListener('fetch', (event) => {
   }
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
   event.respondWith((async () => {
-    const cached = await caches.match(request, { ignoreSearch: true });
+    // Лише свій кеш: caches.match шукав би й у новішій версії, що вже встановилась, але ще не активна
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(request, { ignoreSearch: true });
     if (cached) return cached;
     try {
       return await fetch(request);
     } catch (err) {
-      if (request.mode === 'navigate') return caches.match('./index.html');
+      if (request.mode === 'navigate') return cache.match('./index.html');
       throw err;
     }
   })());

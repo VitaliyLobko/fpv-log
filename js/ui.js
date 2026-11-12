@@ -539,8 +539,10 @@ export function form(fields) {
       input = timeInput(f.value, f.label);
     } else {
       input = h('input', {
-        name: f.name, type: f.type ?? 'text', step: f.step, min: f.min, list: f.list,
-        inputmode: f.type === 'number' ? 'decimal' : undefined,
+        // Число — текстом з цифровою клавіатурою: type=number на «12,5» віддає порожній рядок, і ціна мовчки зникала б
+        name: f.name, type: f.type === 'number' ? 'text' : f.type ?? 'text', list: f.list,
+        inputmode: f.type === 'number' ? 'decimal' : f.type === 'url' ? 'url' : undefined,
+        spellcheck: f.type === 'number' || f.type === 'url' ? 'false' : undefined,
         placeholder: f.placeholder, autocomplete: 'off',
       });
       input.value = f.value ?? '';
@@ -556,7 +558,7 @@ export function form(fields) {
     for (const f of fields) {
       const input = inputs[f.name];
       let v = input.value;
-      if (f.type === 'number') v = v === '' ? null : Number(String(v).replace(',', '.'));
+      if (f.type === 'number') { const raw = String(v).replace(/\s/g, '').replace(',', '.'); v = raw === '' ? null : Number(raw); }
       if (f.type === 'dmy') v = dmyToIso(v) ?? (v.trim() ? NaN : '');
       out[f.name] = typeof v === 'string' ? v.trim() : v;
     }

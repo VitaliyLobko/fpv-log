@@ -54,6 +54,8 @@ function today(when = new Date()) {
   return d.toISOString().slice(0, 10);
 }
 const addDays = (date, n) => new Date(Date.parse(date) + n * 864e5).toISOString().slice(0, 10);
+/** Адреса http(s) для відкриття або null (javascript:, data: і биті рядки з імпорту не відкриваємо). */
+const safeUrl = (s) => { try { const u = new URL(s); return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null; } catch { return null; } };
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const num = (v) => Number(v) || 0;
 /** Хвилини нальоту: «45 хв», «3 год 20 хв». */
@@ -69,6 +71,16 @@ function recall(key) {
 
 function btn(label, onclick, kind = '') {
   return h('button', { type: 'button', class: `btn ${kind}`, onclick }, label);
+}
+
+/** «Зберегти», що спершу щось готує (фото): поки готує — кнопка вимкнена, другий тап не запише вдруге. */
+function busyBtn(label, fn, kind = 'primary') {
+  return btn(label, async (e) => {
+    const b = e.currentTarget;
+    if (b.disabled) return;
+    b.disabled = true;
+    try { await fn(); } finally { b.disabled = false; }
+  }, kind);
 }
 
 function box(title, content, tools = null) {
@@ -117,7 +129,7 @@ function kv(pairs) {
 
 function invalidField(f) {
   const bad = f.invalid();
-  if (bad) fieldError(f.inputs[bad.name], t('Заповніть поле «{label}»', { label: bad.label }));
+  if (bad) fieldError(f.inputs[bad.name], Number.isNaN(f.values()[bad.name]) ? t('Перевірте значення в полі «{label}»', { label: bad.label }) : t('Заповніть поле «{label}»', { label: bad.label }));
   return Boolean(bad);
 }
 
@@ -226,13 +238,15 @@ function migrate(st) {
     const history = [...(it.history ?? []), { date: today(), text: t('Комплект ×4 розділено на 4 мотори') }];
     ids.forEach((id, i) => items.push({ ...it, id, model, price: quarter(it.price, i), ...('soldPrice' in it ? { soldPrice: quarter(it.soldPrice, i) } : {}), history }));
   }
-  const orders = st.orders.filter((o) => o.lines.some((l) => l.itemIds?.some((id) => parts.has(id)))).map((o) => ({
+  // Записи без масивів (бита копія, чужа версія) пропускаємо: падіння тут не відкрило б застосунок узагалі
+  const orders = st.orders.filter((o) => o.lines?.some?.((l) => l.itemIds?.some((id) => parts.has(id)))).map((o) => ({
     ...o,
     lines: o.lines.map((l) => (l.kind === 'consumable' || !l.itemIds?.length || !l.itemIds.every((id) => parts.has(id)) ? l
       : { ...l, model: (l.model ?? '').replace(SET4, '') || l.model, price: num(l.price) / 4, qty: num(l.qty) * 4, itemIds: l.itemIds.flatMap((id) => parts.get(id)) })),
   }));
   const drones = [];
   for (const d of st.drones) {
+    if (!Array.isArray(d.slots)) continue;
     let changed = false;
     const slots = d.slots.flatMap((s) => {
       const ids = parts.get(s.itemId);
@@ -351,12 +365,23 @@ function photoPicker(currentId, { file: preset = null, query = () => '', onSearc
 /** Зміни фото запису rec (поле photoId) з value() пікера: нове — записати, старе — прибрати. Повертає [rec, зміни для db.write]. */
 async function photoChanges(rec, change) {
   if (!change?.removed) return [rec, {}];
-  const old = dropPhotos([rec.photoId].filter(Boolean));
+  // Спершу нове фото: не вдалося розібрати — старе ще не поставлене в чергу на видалення з Диска
   const p = change.file ? await newPhoto(change.file, rec.id) : null;
+  const old = dropPhotos([rec.photoId].filter(Boolean));
   return [{ ...rec, photoId: p?.id ?? null }, {
     photos: { put: p?.photos.put ?? [], del: old.photos?.del ?? [] },
     blobs: { put: p?.blobs.put ?? [], del: old.blobs?.del ?? [] },
   }];
+}
+
+/** photoChanges до закриття форми: фото не розібралось — помилка над кнопками, форма й введене лишаються. */
+async function photoReady(rec, pic) {
+  try {
+    return await photoChanges(rec, pic.value());
+  } catch (err) {
+    formError(`${err.message} — ${t('виберіть інше фото або приберіть його')}`);
+    return null;
+  }
 }
 
 /** Картинка, якою поділились у застосунок: service worker кладе її в кеш, тут — відкрити ту саму форму. */
@@ -508,22 +533,24 @@ function droneForm(d = null, { draft = null, file = null } = {}) {
   });
   const close = sheet(d ? t('Змінити') : t('Новий дрон чи наземка'), h('div', {},
     pic.el, d ? null : h('div', { class: 'field-label' }, t('Тип')), d ? null : kinds, f.el), {
-    actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
+    actions: [btn(t('Скасувати'), () => close()), busyBtn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
       const [orderId, lineId] = (v.buy || '').split('|');
       const buy = orderId ? { orderId, lineId } : null;
-      const rec = d ? { ...d, name: v.name, price: v.price, buyDate: v.buyDate, buy }
+      // Свіжа копія: поки форма була відкрита, синхронізація могла змінити слоти чи нотатки
+      const rec = d ? { ...(findDrone(d.id) ?? d), name: v.name, price: v.price, buyDate: v.buyDate, buy }
         : {
           id: db.uid(), created: Date.now(), name: v.name, kind, group: groupOf(kind), price: v.price, buyDate: v.buyDate, buy,
           slots: SLOTS[kind].map(([cat, tpl]) => ({ id: db.uid(), cat, ...(tpl ? { tpl } : {}), itemId: null })),
           notes: [], configs: [], history: [{ date: today(), text: t('Заведено') }],
         };
+      const ready = await photoReady(rec, pic);
+      if (!ready) return;
       close();
-      const [withPhoto, ph] = await photoChanges(rec, pic.value());
-      await save({ drones: { put: [withPhoto] }, ...ph }, [rec.id]);
+      await save({ drones: { put: [ready[0]] }, ...ready[1] }, [rec.id]);
       if (!d) droneDetail(rec.id);
-    }, 'primary')],
+    })],
   });
 }
 
@@ -650,7 +677,8 @@ function slotForm(d) {
       if (invalidField(f)) return;
       const v = f.values();
       close();
-      await save({ drones: { put: [{ ...d, slots: [...d.slots, { id: db.uid(), cat: v.cat, label: v.label, itemId: null }] }] } }, [d.id]);
+      const cur = findDrone(d.id) ?? d;
+      await save({ drones: { put: [{ ...cur, slots: [...cur.slots, { id: db.uid(), cat: v.cat, label: v.label, itemId: null }] }] } }, [d.id]);
     }, 'primary')],
   });
 }
@@ -856,7 +884,7 @@ function wishForm(w = null, { draft = null, file = null } = {}) {
   let currency = src?.currency ?? 'UAH';
   const f = form([
     { name: 'name', label: t('Що'), value: src?.name, required: true, placeholder: t('напр. DJI O4 Air Unit') },
-    { name: 'link', label: t('Посилання'), value: src?.link, placeholder: 'https://' },
+    { name: 'link', label: t('Посилання'), type: 'url', value: src?.link, placeholder: 'https://' },
     { name: 'price', label: t('Орієнтовна ціна'), type: 'number', value: src?.price, half: true },
     { name: 'droneId', label: t('Для якого дрона'), type: 'select', half: true, value: src?.droneId ?? '',
       options: [['', '—'], ...[...state.drones].sort((a, b) => collate(a.name, b.name)).map((d) => [d.id, d.name])] },
@@ -872,15 +900,20 @@ function wishForm(w = null, { draft = null, file = null } = {}) {
     tools: w ? [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити «{name}»?', { name: w.name }), '', t('Видалити'), async () => {
       close();
       await save({ wishes: { del: [w.id] } });
-    }), 'danger')] : [],
-    actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
+    }), 'danger'), safeUrl(w.link) ? toolBtn('globe', t('Відкрити посилання'), () => window.open(safeUrl(w.link), '_blank', 'noopener')) : null] : [],
+    actions: [btn(t('Скасувати'), () => close()), busyBtn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
-      const rec = { ...(w ?? { id: db.uid(), created: Date.now() }), ...v, droneId: v.droneId || null, currency };
+      // «aliexpress.com/…» без схеми — це https; javascript: та інше — не посилання
+      if (v.link && !/^[a-z][\w+.-]*:/i.test(v.link)) v.link = `https://${v.link}`;
+      if (v.link && !safeUrl(v.link)) { fieldError(f.inputs.link, t('Посилання має починатися з https://')); return; }
+      const base = w ? state.wishes.find((x) => x.id === w.id) ?? w : { id: db.uid(), created: Date.now() };
+      const rec = { ...base, ...v, droneId: v.droneId || null, currency };
+      const ready = await photoReady(rec, pic);
+      if (!ready) return;
       close();
-      const [withPhoto, ph] = await photoChanges(rec, pic.value());
-      await save({ wishes: { put: [withPhoto] }, ...ph }, [rec.id]);
-    }, 'primary')],
+      await save({ wishes: { put: [ready[0]] }, ...ready[1] }, [rec.id]);
+    })],
   });
 }
 
@@ -912,19 +945,20 @@ function itemForm(it = null, { preset = {}, onSaved = null, file = null } = {}) 
   });
   const close = sheet(it ? t('Змінити') : cons ? t('Розхідник') : t('Деталь, що вже була'), h('div', {},
     pic.el, it?.orderId ? h('p', { class: 'muted small' }, t('Ціна й дата — із замовлення.')) : null, f.el), {
-    actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
+    actions: [btn(t('Скасувати'), () => close()), busyBtn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
-      const rec = it ? { ...it, ...v } : {
+      const rec = it ? { ...(findItem(it.id) ?? it), ...v } : {
         id: db.uid(), created: Date.now(), kind, status: 'stock', ...v, fwLog: [],
         history: [{ date: today(), text: t('Додано на склад') }],
       };
       if (cons) { rec.qty = num(v.qty); rec.low = num(v.low); }
+      const ready = await photoReady(rec, pic);
+      if (!ready) return;
       close();
-      const [withPhoto, ph] = await photoChanges(rec, pic.value());
-      await save({ items: { put: [withPhoto] }, ...ph }, [rec.id]);
+      await save({ items: { put: [ready[0]] }, ...ready[1] }, [rec.id]);
       if (!it) onSaved?.(rec);
-    }, 'primary')],
+    })],
   });
 }
 
@@ -967,7 +1001,7 @@ function itemBody(it) {
 }
 
 async function setStatus(it, status, extra, text) {
-  await save({ items: { put: [logged({ ...it, status, droneId: null, brokeIn: null, ...extra }, text)] } }, [it.id]);
+  await save({ items: { put: [logged({ ...(findItem(it.id) ?? it), status, droneId: null, brokeIn: null, ...extra }, text)] } }, [it.id]);
 }
 
 function brokenSheet(it) {
@@ -1006,10 +1040,11 @@ function fwSheet(it, to = it.fw) {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
-      if (v.to === it.fw) { close(); return; }
+      const cur = findItem(it.id) ?? it;
+      if (v.to === cur.fw) { close(); return; }
       close();
-      const rec = logged({ ...it, fw: v.to, fwLog: [...(it.fwLog ?? []), { date: v.date, from: it.fw ?? '', to: v.to }] },
-        t('Прошивка: {from} → {to}', { from: it.fw || '—', to: v.to }), v.date);
+      const rec = logged({ ...cur, fw: v.to, fwLog: [...(cur.fwLog ?? []), { date: v.date, from: cur.fw ?? '', to: v.to }] },
+        t('Прошивка: {from} → {to}', { from: cur.fw || '—', to: v.to }), v.date);
       await save({ items: { put: [rec] } }, [it.id]);
     }, 'primary')],
   });
@@ -1024,7 +1059,8 @@ function qtySheet(it, sign) {
       const { n, note } = f.values();
       if (!(n > 0)) { fieldError(f.inputs.n, t('Більше нуля')); return; }
       close();
-      const rec = logged({ ...it, qty: Math.max(0, num(it.qty) + sign * n) }, `${sign < 0 ? '−' : '+'}${fmt.num(n)} ${t('шт')}${note ? ` · ${note}` : ''}`);
+      const cur = findItem(it.id) ?? it;
+      const rec = logged({ ...cur, qty: Math.max(0, num(cur.qty) + sign * n) }, `${sign < 0 ? '−' : '+'}${fmt.num(n)} ${t('шт')}${note ? ` · ${note}` : ''}`);
       await save({ items: { put: [rec] } }, [it.id]);
     }, 'primary')],
   });
@@ -1121,6 +1157,8 @@ function orderChanges(o, prevLines) {
     const l = o.lines.find((x) => x.id === pl.id);
     if (l && l.kind === (pl.kind ?? 'unit')) continue;
     // Позицію прибрали чи змінили їй вид (деталь ↔ розхідник ↔ дрон) — старі записи складу йдуть, нові створяться нижче
+    const owner = pl.kind === 'drone' && state.drones.find((d) => d.buy?.orderId === o.id && d.buy.lineId === pl.id);
+    if (owner) throw new Error(t('Цією позицією куплено «{name}» — спершу змініть покупку в картці дрона', { name: owner.name }));
     for (const it of pl.itemIds.map(findItem).filter(Boolean)) {
       if (busy(it)) throw new Error(t('«{name}» не на складі — позицію не прибрати', { name: itemName(it) }));
       del.push(it.id);
@@ -1164,6 +1202,8 @@ function removeOrder(o, closeForm) {
     const items = o.lines.flatMap((l) => l.itemIds).map(findItem).filter(Boolean);
     const busy = items.find((it) => it.kind === 'unit' && it.status !== 'stock');
     if (busy) { toast(t('«{name}» не на складі — спершу зніміть чи поверніть', { name: itemName(busy) })); return; }
+    const bought = state.drones.find((d) => d.buy?.orderId === o.id);
+    if (bought) { toast(t('Цим замовленням куплено «{name}» — спершу змініть покупку в картці дрона', { name: bought.name })); return; }
     await save({ orders: { del: [o.id] }, items: { del: items.map((it) => it.id) } });
     closeForm();
     toast(t('Видалено'));
@@ -1247,7 +1287,7 @@ function batteryForm(b = null) {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
       const v = f.values();
-      const rec = b ? { ...b, ...v } : { id: db.uid(), created: Date.now(), ...v, state: 'storage', stateAt: Date.now(), cycles: [] };
+      const rec = b ? { ...(findBattery(b.id) ?? b), ...v } : { id: db.uid(), created: Date.now(), ...v, state: 'storage', stateAt: Date.now(), cycles: [] };
       close();
       await save({ batteries: { put: [rec] } }, [rec.id]);
     }, 'primary')],
@@ -1267,7 +1307,7 @@ function batteryDetail(id) {
 
 function batteryBody(b) {
   const states = chips(BAT_STATES.map(([k, l]) => [k, t(l)]), b.state, (v) => {
-    if (v !== b.state) save({ batteries: { put: [{ ...b, state: v, stateAt: Date.now() }] } }, [b.id]);
+    if (v !== b.state) save({ batteries: { put: [{ ...(findBattery(b.id) ?? b), state: v, stateAt: Date.now() }] } }, [b.id]);
   });
   states.classList.add('segmented', 'bat-states');
   const days = Math.floor((Date.now() - (b.stateAt ?? Date.now())) / 864e5);
@@ -1329,7 +1369,8 @@ function cycleSheet(b) {
       if (invalidField(f)) return;
       const v = f.values();
       close();
-      await save({ batteries: { put: [{ ...b, cycles: [...(b.cycles ?? []), { id: db.uid(), ...v }], state: after, stateAt: Date.now() }] } }, [b.id]);
+      const cur = findBattery(b.id) ?? b;
+      await save({ batteries: { put: [{ ...cur, cycles: [...(cur.cycles ?? []), { id: db.uid(), ...v }], state: after, stateAt: Date.now() }] } }, [b.id]);
     }, 'primary')],
   });
 }
@@ -1643,8 +1684,10 @@ function flightChanges(next, prev) {
     const b = findBattery(bid);
     if (!b) continue;
     const cycles = (b.cycles ?? []).filter((c) => c.flightId !== id);
-    // Напруга й IR, уже вписані в цикл, переживають правку польоту
-    next?.bats.forEach((x, i) => { if (x.batteryId === bid) cycles.push({ ...b.cycles?.find((c) => c.id === `${id}-${i}`), id: `${id}-${i}`, date: next.date, flightId: id }); });
+    // Напруга й IR, уже вписані в цикл, переживають правку польоту — і перестановку батарей у ньому: цикл цієї ж батареї за порядком
+    const mine = (b.cycles ?? []).filter((c) => c.flightId === id);
+    let k = 0;
+    next?.bats.forEach((x, i) => { if (x.batteryId === bid) { const old = mine[k++]; cycles.push({ ...old, id: old?.id ?? `${id}-${i}`, date: next.date, flightId: id }); } });
     cycles.sort((a, c) => collate(a.date, c.date));
     put.push({ ...b, cycles, ...(fresh && b.state !== 'dead' ? { state: 'empty', stateAt: Date.now() } : {}) });
   }
@@ -1702,7 +1745,7 @@ function importData(file) {
 }
 
 function importBtn() {
-  const input = h('input', { type: 'file', accept: '.json,application/json', hidden: true, onchange: (e) => { if (e.target.files[0]) importData(e.target.files[0]); } });
+  const input = h('input', { type: 'file', accept: '.json,application/json', hidden: true, onchange: (e) => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; } });
   return btn(t('Імпорт'), () => input.click());
 }
 
@@ -1719,6 +1762,7 @@ function importParsed(parsed) {
     toast(t('Це не файл FPV Log'));
     return;
   }
+  if (Number(parsed.format) > 1) { toast(t('Файл із новішої версії FPV Log — спершу оновіть застосунок')); return; }
   const count = db.DATA_STORES.reduce((s, k) => s + (data[k]?.length ?? 0), 0);
   const changes = importChanges(data);
   const merge = async () => { await db.mergeImport(changes); await refresh(); toast(t('Імпортовано')); };
@@ -1803,7 +1847,8 @@ function renderSyncChip(s) {
     chip.className = `sync-chip ${s.state}`;
     chip.title = s.message || t('Синхронізація з Google Диском');
   }
-  if (tab === 'settings') render();
+  // Поки людина щось вписує в ⚙ (Марнотрат, дні), статус синхронізації не перебудовує екран — введене не зникне
+  if (tab === 'settings' && !document.activeElement?.matches('#view input, #view textarea, #view select')) render();
 }
 
 function onSyncChip() {
@@ -1959,7 +2004,7 @@ function syncRow() {
   const on = sync.configured() && sync.enabled();
   const bad = on && (s.state === 'auth' || s.state === 'error');
   const value = !sync.configured() ? t('Не налаштовано') : !on ? t('Вимкнено')
-    : s.state === 'auth' ? t('Увійти') : s.state === 'error' ? t('Похибка') : s.state === 'offline' ? t('Офлайн')
+    : s.state === 'auth' ? t('Увійти') : s.state === 'error' ? t('Помилка') : s.state === 'offline' ? t('Офлайн')
       : s.lastSync ? shortWhen(s.lastSync) : t('Ще не було');
   return setRow('sync', 'cloud', t('Google Диск'), value, syncBody(), { tone: bad ? 'bad' : on ? 'ok' : '' });
 }
@@ -2117,7 +2162,17 @@ function render() {
   const view = VIEWS[tab];
   $('title').textContent = t(view.title);
   $('subtitle').textContent = '';
-  $('view').replaceChildren(view.render());
+  let body;
+  try {
+    body = view.render();
+  } catch (err) {
+    // Запис незнайомого вигляду (стара чи новіша версія, ручна правка копії) не має лишати порожній екран: дані в базі цілі
+    console.error(err);
+    body = h('div', { class: 'empty' }, h('h3', {}, t('Не вдалося показати цей екран')),
+      h('p', { class: 'muted' }, t('Дані на пристрої цілі. Збережіть копію й повідомте про помилку: {msg}', { msg: err?.message ?? String(err) })),
+      h('div', { class: 'btn-row' }, btn(t('Поділитися копією'), () => exportData(true), 'primary')));
+  }
+  $('view').replaceChildren(body);
   $('fab').hidden = !view.fab || Boolean($('view').querySelector('.empty .btn.add'));
   $('fab').classList.remove('away');
   document.querySelectorAll('.tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));

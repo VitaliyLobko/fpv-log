@@ -432,7 +432,10 @@ export async function syncNow() {
     const { restoreAt } = conf;
     const local = await db.loadAll();
     const fileId = await findFile();
-    const remote = fileId ? ((await (await api(`${DRIVE}/files/${fileId}?alt=media`)).json())?.data ?? {}) : {};
+    const file = fileId ? await (await api(`${DRIVE}/files/${fileId}?alt=media`)).json() : null;
+    // Файл новішого формату ця версія не розуміє: злиття з ним і запис поверх зіпсували б дані інших пристроїв
+    if (Number(file?.format) > 1) throw new Error(t('Файл на Диску з новішої версії FPV Log — оновіть застосунок'));
+    const remote = file?.data ?? {};
     const merged = merge(local, restoreAt ? bury(local, remote, restoreAt) : remote);
     const changes = localChanges(local, merged);
     if (changes) await db.writeMerged(changes);
