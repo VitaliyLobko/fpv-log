@@ -1023,7 +1023,52 @@ function renderBatteries() {
   if (!list.length) return h('div', {}, empty(t('Батарей ще немає'), t('Кожна банка — окремий запис з номером. Додайте кнопкою «+».'), [btn(t('Додати'), () => batteryForm(), 'primary add')]));
   return h('div', {}, staleBanner(),
     h('div', { class: 'rows' }, live.map(batRow)),
-    dead.length ? box(t('Списані'), h('div', { class: 'rows' }, dead.map(batRow))) : null);
+    dead.length ? box(t('Списані'), h('div', { class: 'rows' }, dead.map(batRow))) : null,
+    h('div', { class: 'btn-row' }, btn(t('Друк наклейок'), () => labelsSheet(live))));
+}
+
+// ---------- наклейки з QR ----------
+
+/** Адреса батареї для QR: камера телефона відкриє застосунок одразу на «+ цикл». Хост — поточний, тож працює й не на GitHub Pages. */
+const batUrl = (b) => `${location.origin}${location.pathname}#bat=${encodeURIComponent(b.id)}`;
+
+/** Вибір батарей для друку (усі одразу позначені) → аркуш наклейок: великий номер, S і мАг, QR. */
+function labelsSheet(list) {
+  const picked = new Set(list.map((b) => b.id));
+  const pick = h('div', { class: 'chips check' }, list.map((b) => h('button', {
+    type: 'button', class: 'on', onclick: (e) => { if (!picked.delete(b.id)) picked.add(b.id); e.currentTarget.classList.toggle('on', picked.has(b.id)); },
+  }, `#${b.num}`)));
+  const close = sheet(t('Друк наклейок'), h('div', {},
+    h('p', { class: 'muted small' }, t('QR веде на батарею: камера телефона відкриє застосунок одразу на «+ цикл».')), pick), {
+    actions: [btn(t('Скасувати'), () => close()), btn(t('Друкувати'), async () => {
+      const bats = list.filter((b) => picked.has(b.id));
+      if (!bats.length) { toast(t('Позначте хоча б одну батарею')); return; }
+      close();
+      await printLabels(bats);
+    }, 'primary')],
+  });
+}
+
+async function printLabels(bats) {
+  const { default: qrcode } = await import('./vendor/qrcode.js');
+  const qr = (text) => {
+    const q = qrcode(0, 'M');
+    q.addData(text);
+    q.make();
+    const el = h('span', { class: 'label-qr' });
+    el.innerHTML = q.createSvgTag({ cellSize: 1, margin: 2, scalable: true });
+    return el;
+  };
+  const sheetEl = h('div', { id: 'labels' }, bats.map((b) => h('div', { class: 'label' },
+    h('span', { class: 'label-text' }, h('b', {}, `#${b.num}`), h('span', {}, [b.s && `${b.s}S`, b.mah && `${b.mah} ${t('мАг')}`].filter(Boolean).join(' · ')),
+      b.brand ? h('span', {}, b.brand) : null),
+    qr(batUrl(b)))));
+  document.getElementById('labels')?.remove();
+  document.body.append(sheetEl);
+  document.body.classList.add('printing');
+  const done = () => { sheetEl.remove(); document.body.classList.remove('printing'); };
+  window.addEventListener('afterprint', done, { once: true });
+  window.print();
 }
 
 function batteryForm(b = null) {
@@ -1729,6 +1774,16 @@ function render() {
 }
 
 function route() {
+  // QR з наклейки: #bat=<id> — картка батареї й одразу «+ цикл»; адреса стає звичайною вкладкою
+  const bat = location.hash.match(/^#bat=(.+)$/)?.[1];
+  if (bat) {
+    history.replaceState(null, '', '#batteries');
+    tab = 'batteries';
+    render();
+    const b = findBattery(decodeURIComponent(bat));
+    if (b) { batteryDetail(b.id); cycleSheet(b); } else toast(t('Батарею з наклейки не знайдено'));
+    return;
+  }
   const next = location.hash.slice(1);
   tab = VIEWS[next] ? next : 'drones';
   render();
