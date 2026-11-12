@@ -17,9 +17,7 @@
   --on-fill: var(--on-accent);
   --buy: #46a862;
   --shoot: #ea6f5c;
-  --half: #b5b86a;
   --warn: #dbad3a;
-  --clean: #4fa7cf;
   /* текст на заливці акцентом/купівлею/пострілом: на яскравому помаранчевому білий не читався (2.7:1) */
   --on-accent: #04161a;
   --radius: 16px;
@@ -66,9 +64,7 @@
   /* темніші за темну тему: на білому світлі відтінки ледь читались (жовтий — 2:1) */
   --buy: #26803f;
   --shoot: #a5321f;
-  --half: #7c7f22;
   --warn: #7a5600;
-  --clean: #2a7fa6;
   --on-accent: #fff;
   --shadow: 0 1px 2px rgb(20 35 45 / .06), 0 6px 16px rgb(20 35 45 / .06);
   color-scheme: light;
@@ -85,7 +81,7 @@
 :root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) body {
   text-shadow: 0 0 6px color-mix(in srgb, currentColor 55%, transparent); }
 :root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) :is(.topbar h1, h2, h3, .hero-label, .hero-value,
-  .thumb, .box-toggle, .settings-group > legend, .stat-value, .btn, .chips button, .tabs span) {
+  .thumb, .settings-group > legend, .stat-value, .btn, .chips button, .tabs span) {
   font-family: ui-monospace, "Cascadia Mono", Consolas, "Roboto Mono", monospace; }
 :root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) :is(.topbar h1, h3) { text-transform: uppercase; letter-spacing: .06em; }
 :root:is([data-theme="phosphor"], [data-theme="amber"], [data-theme="white"]) body::after { content: ""; position: fixed; inset: 0;
@@ -103,6 +99,10 @@
 [hidden] { display: none !important; }
 
 html { -webkit-text-size-adjust: 100%; }
+/* без затримки подвійного тапу на кнопках і полях */
+a, button, input, select, textarea, label, summary { touch-action: manipulation; }
+/* Фокус з клавіатури — акцентним кільцем: системне на графіті майже не видно */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 body {
   margin: 0;
@@ -124,9 +124,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
-.neg { color: var(--shoot); }
-.pos { color: var(--buy); }
-.zero { color: var(--muted); }
 .warn-text { color: var(--warn); }
 
 /* --- шапка --- */
@@ -145,7 +142,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .topbar #subtitle { font-size: 14px; }
 /* Порожній підзаголовок не тримає рядок — шапка нижча, екрану більше місця */
 .topbar #subtitle:empty { display: none; }
-.back-btn[hidden] { display: none; }
 .topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .topbar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .app-icon { width: 30px; height: 30px; flex: none; border-radius: 8px; object-fit: cover; }
@@ -171,24 +167,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .field-error { color: var(--shoot); font-size: 12px; font-weight: 600; }
 .form-error { margin: 0; padding: 8px 16px; color: var(--shoot); font-size: 13px; font-weight: 600; }
 .topbar-actions { display: flex; flex: none; align-items: center; gap: 8px; }
-.gear {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-.gear svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
-.gear svg path { stroke-width: 2.6; }   /* зубці шестерні товсті — інакше в 21 px це «сонце» */
-#tour-btn svg path { stroke-width: 2; }
-.gear.active { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--accent-soft); }
-/* Перейшли в налаштування — шестерня провертається на два зубці з доворотом, як механізм */
-#settings-btn.play svg { animation: gear-turn 1.4s cubic-bezier(.3, 0, .2, 1); }
-@keyframes gear-turn { 0% { transform: none; } 60% { transform: rotate(100deg); } 80% { transform: rotate(84deg); } 100% { transform: rotate(90deg); } }
-@media (prefers-reduced-motion: reduce) { #settings-btn.play svg { animation: none; } }
 .sync-chip.idle { color: var(--buy); }
 .sync-chip.auth { color: var(--accent-2); border-color: var(--accent); }
 .sync-chip.error { color: var(--shoot); border-color: var(--shoot); }
@@ -226,10 +204,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   box-shadow: var(--shadow);
   overflow: hidden;
 }
-.hero.accent {
-  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 26%, var(--surface)), var(--surface) 70%);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-}
 .hero-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .hero-value {
   display: flex;
@@ -242,7 +216,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
-.hero.accent .hero-value { color: var(--accent-2); }
 
 .thumb {
   flex: none;
@@ -282,7 +255,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--line);
   border-radius: 14px;
   cursor: pointer;
+  transition: background-color .12s ease;
 }
+/* відгук на дотик: tap-highlight вимкнено в body */
+.row:active, button.row-main:active { background-color: var(--surface-2); }
+.chips button:active { filter: brightness(1.15); }
 .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .row-title { font-weight: 600; overflow-wrap: anywhere; }
 .row-qty { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -292,36 +269,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .box > .muted:last-child, .box-body > .muted:last-child { margin: 4px 0 0; }
 /* Список «назва — значення» останнім у блоці — без свого відступу: рамка має власний. */
 .box .kv:last-child { margin-bottom: 0; }
-.kv-lead { margin-bottom: 8px; font-weight: 650; overflow-wrap: anywhere; }
-.kv-lead:last-child { margin-bottom: 0; }
 /* Рядки всередині блоку — без власних рамок, розділені лінією: рамка вже є в блоку. */
 .box .rows { gap: 0; }
 .box .row { padding: 10px 2px; border: 0; border-radius: 0; background: none; }
 .box .row + .row { border-top: 1px solid var(--line-soft); }
-/* Згорнутий блок — лише заголовок на лінії, без рамки навколо порожнечі. */
-.box.closed { padding: 0; border-width: 1px 0 0; border-radius: 0; }
-.box.closed > legend { margin-left: 0; padding-left: 0; }
 /* Назва секції на сторінці — на плашці, бо під нею фон із візерунком (у шторках тло суцільне) */
 #view .box > legend { padding: 2px 10px 2px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; }
-.box.closed > .box-body { display: none; }
-/* Кнопка на рамці праворуч: кругла, зі своїм тлом — сидить на лінії, як заголовок ліворуч */
-.box { position: relative; }
-.box > .icon-btn.box-corner {
-  position: absolute;
-  /* центр кнопки — на лінії рамки (середина легенди) */
-  top: -26px;
-  right: 12px;
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-.box > .icon-btn.box-corner svg { width: 16px; height: 16px; }
-.box-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; text-align: left; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
-.box-chevron { display: inline-block; font-size: 16px; line-height: 1; color: var(--accent-2); transform: rotate(90deg); transition: transform .15s; }
-.box.closed .box-chevron { transform: none; }
-.box-count { padding: 0 7px; border-radius: 9px; background: var(--surface-2); font-weight: 600; letter-spacing: 0; }
-
 /* «Про застосунок»: фото автора ліворуч, текст поруч. */
 .about-head { display: flex; align-items: center; gap: 12px; }
 .about-head h3 { margin: 0 0 2px; }
@@ -345,15 +298,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .stat.accent { background: var(--accent-soft); }
 .stat.accent .stat-value { color: var(--accent-2); }
 .stat-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.stat-value .nw { white-space: nowrap; }
-.stat-value .unit { margin-left: 1px; font-size: .62em; font-weight: 700; color: var(--muted); }
 
 .empty { text-align: center; padding: 48px 12px; }
 .empty .btn-row { justify-content: center; max-width: 360px; margin: 18px auto 0; }
 .empty .btn-row .btn.primary { flex-basis: 100%; }
-.archive { margin-top: 12px; color: var(--muted); }
-.archive summary { cursor: pointer; padding: 6px 2px; }
-.archive-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; }
 
 .tool-ico { display: inline-grid; place-items: center; width: 26px; height: 26px; vertical-align: middle; border-radius: 50%; background: var(--surface-2); color: var(--text); }
 .tool-ico svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
@@ -370,13 +318,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .btn:active { transform: scale(.98); }
 .btn.primary { background: linear-gradient(180deg, var(--fill-2), var(--fill)); border-color: var(--fill); color: var(--on-fill); }
-/* Кнопки в картках — обведення в колір, фон лише натяком; суцільний колір лишається підтвердженню у шторці (.primary). */
-.btn.buy { background: color-mix(in srgb, var(--buy) 12%, var(--surface-2)); border-color: color-mix(in srgb, var(--buy) 60%, var(--line)); color: color-mix(in srgb, var(--buy) 72%, var(--text)); }
-.btn.shoot { background: color-mix(in srgb, var(--shoot) 12%, var(--surface-2)); border-color: color-mix(in srgb, var(--shoot) 60%, var(--line)); color: color-mix(in srgb, var(--shoot) 72%, var(--text)); }
 .btn.quiet { background: none; border-color: transparent; color: var(--muted); font-weight: 600; }
 .btn.danger { color: var(--shoot); border-color: color-mix(in srgb, var(--shoot) 50%, var(--line)); }
-.btn-ico { display: inline-grid; place-items: center; margin-right: 7px; vertical-align: -4px; }
-.btn-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .check { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; cursor: pointer; }
 .check input { width: 22px; height: 22px; accent-color: var(--accent); }
 .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
@@ -405,12 +348,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .chips button.on { background: var(--fill); border-color: var(--fill); color: var(--on-fill); font-weight: 650; }
-/* Підказки значень під полем (дистанція) — дрібніші за звичайні чипи, щоб не тягнули увагу з поля */
-.chips.chips-sm { gap: 5px; margin-top: 0; }
-.chips.chips-sm button { min-height: 30px; padding: 3px 11px; border-radius: 15px; font-size: 13px; }
-/* Числа (кількість, дистанція) — одним рядком рівної ширини: не переносяться по одному. */
-.chips.chips-num { flex-wrap: nowrap; }
-.chips.chips-num button { flex: 1 1 0; min-width: 0; padding-inline: 2px; }
 .chips.check button.on::before { content: '✓ '; }
 
 .chips.segmented {
@@ -438,12 +375,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .form > .check { grid-column: 1 / -1; margin: 0; }
 .field { display: flex; flex-direction: column; gap: 4px; grid-column: 1 / -1; }
 .field.half { grid-column: span 1; min-width: 0; justify-content: flex-end; }
-/* Дата ширша за час: на телефоні вона буває «18 жовт. 2026 р.» і в пів рядка не влазить. */
-.form.when { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
-.form + .form.when { margin-top: 10px; }
-.field input[type="date"], .field input[type="time"] { min-width: 0; padding-inline: 10px 8px; }
 .field-label { font-size: 13px; color: var(--muted); }
-.field input, .field select, .field textarea, .item-row select, .item-row input {
+.field input, .field select, .field textarea {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -451,7 +384,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--line);
   background: var(--bg);
 }
-.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0 0 12px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
@@ -568,7 +501,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .icon-btn.tool svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
 .icon-btn.tool.danger { color: var(--shoot); }
 .icon-btn.tool.on { background: var(--accent-soft); color: var(--accent-2); }
-.sheet-body { overflow-y: auto; padding: 4px 16px 12px; }
+.sheet-body { overflow-y: auto; overscroll-behavior: contain; padding: 4px 16px 12px; }
 .sheet-body h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
 .sheet-actions { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
 .sheet-actions .btn { flex: 1; }
@@ -610,8 +543,6 @@ body:has(#layer .backdrop) .toast:not(.reminder) { bottom: auto; top: calc(env(s
 .ex-more[open] > summary::before { transform: rotate(90deg); }
 
 .changes { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
-/* Приблизно в доларах — другим дрібним рядком під сумою (⚙ → «Курс НБУ») */
-.usd { display: block; margin-top: 1px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--muted); }
 
 /* ⚙ Налаштування групами: рамка з назвою на лінії, розділи всередині — через лінію, без окремих карток */
 .settings-group { margin: 22px 0 14px; padding: 2px 16px 4px; background: var(--surface); box-shadow: var(--shadow); border-radius: var(--radius); }
@@ -647,8 +578,8 @@ body:has(#layer .backdrop) .toast:not(.reminder) { bottom: auto; top: calc(env(s
 
 /* Зона дотику ≥ 44 px для дрібних кнопок: вигляд той самий, палець ловить ширше.
    :where — нульова специфічність, тож власне position кнопки (absolute) не перебивається. */
-:where(.gear, .icon-btn, .box-toggle, .panel.about a, .chips button) { position: relative; }
-:where(.gear, .icon-btn, .box-toggle, .panel.about a, .chips button)::after {
+:where(.icon-btn, .panel.about a, .chips button) { position: relative; }
+:where(.icon-btn, .panel.about a, .chips button)::after {
   content: '';
   position: absolute;
   inset: min(0px, calc(50% - 22px));
@@ -812,4 +743,18 @@ span.ir-max::before { background: var(--warn); }
 @media (max-width: 379px) {
   .form { grid-template-columns: 1fr; }
   .field.half { grid-column: 1 / -1; }
+}
+
+/* Дії рядка (деталь у слоті, побажання) — кнопка, щоб відкривалась і з клавіатури */
+button.row-main { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
+.photo-btn { display: block; width: 100%; margin: 0 0 12px; padding: 0; border: 0; border-radius: 14px; background: none; cursor: zoom-in; }
+.photo-btn .drone-photo { margin: 0; }
+.sync-chip { display: inline-flex; align-items: center; gap: 5px; }
+.sync-chip .ico { display: grid; }
+.sync-chip .ico svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.btn.with-ico .ico svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* Менше руху: шторки, тости, підсвітка й «+» — без анімацій і переходів */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }

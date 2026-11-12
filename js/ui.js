@@ -82,6 +82,13 @@ export function swipeStep(el, step) {
 // Відкриті «живі» шторки: картка під іншою шторкою має побачити, що там змінили чи видалили.
 const liveSheets = new Set();
 
+/** Під верхньою шторкою все глухе (inert): Tab і читалка екрана не тікають під затемнення. */
+function syncInert() {
+  const open = [...document.querySelectorAll('#layer > .backdrop:not(.closing)')];
+  open.forEach((b, i) => { b.inert = i < open.length - 1; });
+  for (const el of document.querySelectorAll('body > header, body > main, body > nav, #fab, #update')) el.inert = open.length > 0;
+}
+
 /** Перебудовує відкриті живі шторки за свіжим станом; live() поверне null — запису вже нема, шторка закривається. */
 export function refreshSheets() {
   for (const s of [...liveSheets]) s();
@@ -167,6 +174,8 @@ export function sheet(title, body, { actions = [], onClose, live, tools = [], le
     if (closed) return;
     closed = true;
     backdrop.inert = true;
+    backdrop.classList.add('closing');
+    syncInert();
     document.removeEventListener('keydown', onKey);
     // Фокус — назад на кнопку, що відкрила; поле вводу не чіпаємо, щоб на телефоні не вискакувала клавіатура
     if (opener?.isConnected && !opener.matches('input, textarea') && backdrop.contains(document.activeElement)) opener.focus({ preventScroll: true });
@@ -206,7 +215,7 @@ export function sheet(title, body, { actions = [], onClose, live, tools = [], le
   const danger = [tools].flat(Infinity).filter((x) => x?.classList?.contains('danger'));
   const rest = [tools].flat(Infinity).filter((x) => !danger.includes(x));
   const left = [danger, lead].flat(Infinity).filter(Boolean);
-  const panel = h('section', { class: full ? 'sheet full' : 'sheet', role: 'dialog', 'aria-label': titleOf() },
+  const panel = h('section', { class: full ? 'sheet full' : 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': titleOf() },
     h('div', { class: 'sheet-grip' }),
     h('header', { class: 'sheet-head' },
       left.length ? h('div', { class: 'sheet-lead' }, left) : null,
@@ -243,6 +252,7 @@ export function sheet(title, body, { actions = [], onClose, live, tools = [], le
   const onKey = (e) => { if (e.key === 'Escape' && layer.lastElementChild === backdrop) { e.preventDefault(); ask(); } };
   document.addEventListener('keydown', onKey);
   layer.append(backdrop);
+  syncInert();
   requestAnimationFrame(() => {
     backdrop.classList.add('open');
     // Читалка й клавіатура опиняються в шторці, а не на сторінці під нею
@@ -323,46 +333,6 @@ export function confirmed(ids = []) {
   }
 }
 
-/** Прокрутити до картки id і підсвітити; екран ще малюється — кілька спроб. Повертає, чи знайшли. */
-export function reveal(id, tries = 10) {
-  const el = holders(id)[0];
-  const target = el && visibleAnchor(el);
-  if (!target) { if (tries > 0) setTimeout(() => reveal(id, tries - 1), 60); return; }
-  target.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  flash(target);
-}
-
-let undoFn = null;
-let undoBtn = null;
-
-/** «Скасувати» в шапці: без таймера, живе до наступної зміни даних. */
-export function setUndo(label, fn) {
-  if (!undoBtn) {
-    undoBtn = h('button', { type: 'button', class: 'undo-btn', hidden: true }, h('span', { 'aria-hidden': 'true' }, '↶'), h('span', {}, t('Скасувати')));
-    undoBtn.addEventListener('click', async () => {
-      const run = undoFn;
-      clearUndo();
-      await run?.();
-      confirmed();
-    });
-    document.querySelector('.topbar-actions')?.prepend(undoBtn);
-  }
-  undoFn = fn;
-  undoBtn.title = label;
-  undoBtn.setAttribute('aria-label', `${t('Скасувати')}: ${label}`);
-  undoBtn.hidden = false;
-}
-
-export function clearUndo() {
-  undoFn = null;
-  if (undoBtn) undoBtn.hidden = true;
-}
-
-// Будь-який новий запис робить скасування застарілим (синхронізація цієї події не шле).
-window.addEventListener('db-change', clearUndo);
-// Синхронізація принесла чужі зміни — старий знімок для скасування перетер би новішу правку з іншого пристрою
-window.addEventListener('sync-applied', (e) => { if (e.detail?.remote) clearUndo(); });
-
 /** Помилка під полем: рамка й текст, зникають, щойно поле виправляють. */
 export function fieldError(input, message) {
   const field = input?.closest('.field');
@@ -393,123 +363,6 @@ export function formError(message) {
   panel.addEventListener('change', clear, { once: true });
 }
 
-const pad2 = (n) => String(n).padStart(2, '0');
-const TURN = Math.PI * 2;
-// Години як на циферблаті Android: зовні 12, 1…11, всередині 00, 13…23
-const outerHour = (i) => (i === 0 ? 12 : i);
-const innerHour = (i) => (i === 0 ? 0 : i + 12);
-// Внутрішнє коло — ближче за цю частку радіуса циферблата
-const INNER_RING = 0.62;
-
-/**
- * Вибір часу циферблатом, як в Android: тап чи палець по колу — година, далі коло хвилин (крок 5).
- * Шторка поверх форми; '' — «Без часу», null — закрили без вибору.
- */
-export function pickTime(value, title) {
-  return new Promise((resolve) => {
-    let [hh, mm] = (value || new Date().toTimeString().slice(0, 5)).split(':').map(Number);
-    let mode = 'h';
-    let result = null;
-    const hBtn = h('button', { type: 'button', class: 'tp-part', onclick: () => { mode = 'h'; draw(); } });
-    const mBtn = h('button', { type: 'button', class: 'tp-part', onclick: () => { mode = 'm'; draw(); } });
-    const dial = h('div', { class: 'tp-dial', role: 'group' });
-    const hand = h('span', { class: 'tp-hand', 'aria-hidden': 'true' });
-    // Позиція на колі: індекс 0–11 від 12-ї години за стрілкою, r — частка радіуса
-    const place = (el, i, r) => {
-      const a = (i / 12) * TURN;
-      el.style.left = `${50 + Math.sin(a) * r * 50}%`;
-      el.style.top = `${50 - Math.cos(a) * r * 50}%`;
-    };
-    const num = (label, on, i, r, pick, inner = false) => {
-      const b = h('button', {
-        type: 'button', class: `tp-num${inner ? ' inner' : ''}${on ? ' on' : ''}`, tabindex: on ? 0 : -1,
-        // Мишею й пальцем обирає коло (pointer-обробник), кнопка — для клавіатури
-        onclick: (e) => { if (e.detail === 0) pick(); },
-      }, label);
-      place(b, i, r);
-      return b;
-    };
-    const draw = () => {
-      hBtn.textContent = pad2(hh);
-      mBtn.textContent = pad2(mm);
-      hBtn.classList.toggle('on', mode === 'h');
-      mBtn.classList.toggle('on', mode === 'm');
-      dial.setAttribute('aria-label', mode === 'h' ? t('Година') : t('Хвилини'));
-      const nums = [];
-      let handI;
-      let handR = 0.8;
-      if (mode === 'h') {
-        for (let i = 0; i < 12; i++) {
-          nums.push(num(String(outerHour(i)), hh === outerHour(i), i, 0.8, () => setHour(outerHour(i))));
-          nums.push(num(pad2(innerHour(i)), hh === innerHour(i), i, 0.5, () => setHour(innerHour(i)), true));
-        }
-        handI = hh % 12;
-        if (hh === 0 || hh > 12) handR = 0.5;
-      } else {
-        for (let i = 0; i < 12; i++) nums.push(num(pad2(i * 5), mm === i * 5, i, 0.8, () => setMinute(i * 5)));
-        handI = mm / 5;
-      }
-      hand.style.transform = `rotate(${(handI / 12) * 360}deg)`;
-      hand.style.height = `${handR * 50}%`;
-      dial.replaceChildren(hand, h('span', { class: 'tp-center', 'aria-hidden': 'true' }), ...nums);
-    };
-    const setHour = (v) => { hh = v; mode = 'm'; draw(); };
-    const setMinute = (v) => { mm = v; draw(); };
-    // Палець по колу: найближча поділка; для години — ще й коло (зовнішнє чи внутрішнє)
-    const fromPointer = (e) => {
-      const r = dial.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2);
-      const dy = e.clientY - (r.top + r.height / 2);
-      const i = Math.round((((Math.atan2(dx, -dy) + TURN) % TURN) / TURN) * 12) % 12;
-      if (mode === 'h') hh = Math.hypot(dx, dy) < (r.width / 2) * INNER_RING ? innerHour(i) : outerHour(i);
-      else mm = i * 5;
-      draw();
-    };
-    let dragging = false;
-    dial.addEventListener('pointerdown', (e) => {
-      dragging = true;
-      try { dial.setPointerCapture(e.pointerId); } catch { /* вказівник уже відпущено */ }
-      fromPointer(e);
-    });
-    dial.addEventListener('pointermove', (e) => { if (dragging) fromPointer(e); });
-    dial.addEventListener('pointerup', () => {
-      if (!dragging) return;
-      dragging = false;
-      if (mode === 'h') { mode = 'm'; draw(); }
-    });
-    dial.addEventListener('pointercancel', () => { dragging = false; });
-    draw();
-    const done = (v) => { result = v; close(); };
-    const close = sheet(title, h('div', { class: 'tp' },
-      h('p', { class: 'tp-now' }, hBtn, h('span', { 'aria-hidden': 'true' }, ':'), mBtn), dial), {
-      actions: [
-        value ? h('button', { type: 'button', class: 'btn', onclick: () => done('') }, t('Без часу')) : null,
-        h('button', { type: 'button', class: 'btn primary', onclick: () => done(`${pad2(hh)}:${pad2(mm)}`) }, t('Готово')),
-      ].filter(Boolean),
-      onClose: () => resolve(result),
-    });
-  });
-}
-
-/** Поле часу замість input type=time: кнопка «ГГ:ХХ» відкриває циферблат; value й події input/change — як у input. */
-function timeInput(value, label) {
-  let current = '';
-  const el = h('button', { type: 'button', class: 'time-field', 'aria-label': label });
-  Object.defineProperty(el, 'value', {
-    get: () => current,
-    set: (v) => { current = v ?? ''; el.textContent = current || '--:--'; },
-  });
-  el.value = value ?? '';
-  el.addEventListener('click', async () => {
-    const v = await pickTime(current, label);
-    if (v === null || v === current) return;
-    el.value = v;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-  return el;
-}
-
 /** Пункти <select>: [value, label] або група { group, options: [[value, label], …] }. */
 export function selectOptions(options, selected) {
   const option = ([value, label]) => h('option', { value, selected: String(value) === String(selected ?? '') }, label);
@@ -535,8 +388,6 @@ export function form(fields) {
       input = chips(f.options, f.value, f.onPick);
     } else if (f.type === 'dmy') {
       input = dmyInput(f.value);
-    } else if (f.type === 'time') {
-      input = timeInput(f.value, f.label);
     } else {
       input = h('input', {
         // Число — текстом з цифровою клавіатурою: type=number на «12,5» віддає порожній рядок, і ціна мовчки зникала б
@@ -611,7 +462,11 @@ function dmyInput(iso) {
 export function chips(options, value, onPick) {
   const wrap = h('div', { class: 'chips' });
   wrap.value = value ?? '';
-  const sync = () => wrap.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.value === String(wrap.value)));
+  const sync = () => wrap.querySelectorAll('button').forEach((b) => {
+    const on = b.dataset.value === String(wrap.value);
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
   for (const opt of options) {
     const [val, label] = Array.isArray(opt) ? opt : [opt, opt];
     wrap.append(h('button', {
@@ -621,79 +476,6 @@ export function chips(options, value, onPick) {
   }
   sync();
   return wrap;
-}
-
-/**
- * Свайп картки: вправо — onRight, вліво — onLeft. Вертикальний скрол лишається браузеру
- * (touch-action: pan-y), горизонтальний рух перехоплюємо. onSwipe — після будь-якого спрацьованого свайпу.
- */
-export function swipeable(card, { onRight, onLeft, onTap, onSwipe, rightLabel, leftLabel }) {
-  const body = card.querySelector('.swipe-body');
-  card.classList.add('swipe');
-  card.prepend(
-    h('div', { class: 'swipe-bg right' }, rightLabel ?? ''),
-    h('div', { class: 'swipe-bg left' }, leftLabel ?? ''));
-  card.tabIndex = 0;
-  card.addEventListener('keydown', (e) => { if (e.key === 'Enter') onTap?.(); });
-  let start = null;
-  let axis = null;
-  let dx = 0;
-  let armed = false;
-
-  const reset = () => {
-    body.style.transition = 'transform .18s ease';
-    body.style.transform = '';
-    card.classList.remove('armed', 'dir-right', 'dir-left');
-    start = null; axis = null; dx = 0; armed = false;
-  };
-
-  card.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || e.target.closest('button, a, input')) return;
-    start = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    axis = null; dx = 0; tapArmed = false;
-    body.style.transition = 'none';
-  });
-  card.addEventListener('pointermove', (e) => {
-    if (!start || e.pointerId !== start.id) return;
-    const mx = e.clientX - start.x;
-    const my = e.clientY - start.y;
-    if (!axis) {
-      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
-      axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
-      if (axis === 'x') card.setPointerCapture(start.id);
-    }
-    if (axis !== 'x') return;
-    dx = mx;
-    if ((dx > 0 && !onRight) || (dx < 0 && !onLeft)) dx = 0;
-    body.style.transform = `translateX(${dx}px)`;
-    card.classList.toggle('dir-right', dx > 0);
-    card.classList.toggle('dir-left', dx < 0);
-    const nowArmed = Math.abs(dx) > card.clientWidth * 0.3;
-    if (nowArmed !== armed) { armed = nowArmed; card.classList.toggle('armed', armed); if (armed) vibrate(); }
-  });
-  const finish = (e) => {
-    if (!start || e.pointerId !== start.id) return;
-    const wasAxis = axis;
-    const wasArmed = armed;
-    const dir = dx;
-    reset();
-    if (wasAxis === 'x') {
-      if (wasArmed) { onSwipe?.(); (dir > 0 ? onRight : onLeft)?.(); }
-    } else if (!wasAxis && e.type === 'pointerup') {
-      tapArmed = true;
-    }
-  };
-  // Тап відкриваємо на click, а не на pointerup: click приходить останнім,
-  // тож після відкриття шторки вже нема «фантомного» кліку, який її закриє.
-  let tapArmed = false;
-  card.addEventListener('click', () => {
-    if (!tapArmed) return;
-    tapArmed = false;
-    onTap?.();
-  });
-  card.addEventListener('pointerup', finish);
-  card.addEventListener('pointercancel', finish);
-  return card;
 }
 
 const TOOL_ICON = {
@@ -731,14 +513,8 @@ const TOOL_ICON = {
   wind: '<path d="M3 9h11a3 3 0 1 0-3-3"/><path d="M3 15h15a3 3 0 1 1-3 3"/><path d="M3 12h7"/>',
   // рядок коду — конфіг
   code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5l5 5"/>',
 };
-
-/** Зірка «найкраще»: SVG, бо гліф ★ у кожному шрифті сидить на своїй висоті й не стає по цифрах поруч. */
-export function starIcon(label) {
-  const el = h('span', { class: 'star-ico', role: 'img', title: label, 'aria-label': label });
-  el.innerHTML = '<svg viewBox="1.7 1.5 20.6 19.6" aria-hidden="true"><path d="M12 1.5l3.1 6.6 7.2.9-5.3 5 1.4 7.1L12 17.6l-6.4 3.5L7 14l-5.3-5 7.2-.9z"/></svg>';
-  return el;
-}
 
 /** Іконка з набору TOOL_ICON — для своїх кнопок. */
 export function icon(name) {

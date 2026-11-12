@@ -283,6 +283,9 @@ function dropPhotos(ids) {
   return list.length ? { photos: { del: list.map((p) => p.id) }, blobs: { del: list.map((p) => p.id) } } : {};
 }
 
+/** Велике фото в картці: кнопка — відкривається й з клавіатури. */
+const photoBtn = (src, onclick) => h('button', { type: 'button', class: 'photo-btn', 'aria-label': t('Відкрити фото'), onclick }, h('img', { class: 'drone-photo', src, alt: '' }));
+
 /** Мініатюра в рядку: тап по ній — фото на весь екран, по решті рядка — картка. Без фото — монограма (fallback) або нічого. */
 function thumbImg(photoId, fallback = '') {
   const p = findPhoto(photoId);
@@ -349,7 +352,7 @@ function photoPicker(currentId, { file: preset = null, query = () => '', onSearc
         ondrop: (e) => { e.preventDefault(); take(e.dataTransfer?.files?.[0]); },
       }, src ? h('img', { src, alt: '' }) : h('span', {}, '+ ', t('Фото'))),
       h('div', { class: 'photo-pick-acts' },
-        btn(`🔍 ${t('Знайти фото')}`, search, 'mini'),
+        btn([icon('search'), t('Знайти фото')], search, 'mini with-ico'),
         h('div', { class: 'photo-pick-icons' },
           navigator.clipboard?.read ? toolBtn('paste', t('Вставити'), paste) : null,
           toolBtn('gallery', t('З галереї'), () => input.click()),
@@ -567,7 +570,7 @@ function droneBody(d) {
   const b = boughtLine(d);
   const flown = state.flights.filter((f) => f.droneId === d.id);
   return h('div', {},
-    photo ? h('img', { class: 'drone-photo', src: photo.thumb, alt: '', onclick: () => showPhoto(photo.id, dronePhotos(d)) }) : null,
+    photo ? photoBtn(photo.thumb, () => showPhoto(photo.id, dronePhotos(d))) : null,
     kv([[t('Тип'), kindLabel(d.kind)], [t('Вартість'), fmt.money(droneCost(d))],
       [t('Куплено'), b ? `${b.o.shop} · ${fmt.date(b.o.date)}` : d.buyDate ? fmt.date(d.buyDate) : null],
       flown.length ? [t('Наліт'), `${fmtMin(flown.reduce((n, f) => n + flightMin(f), 0))} · ${t('польотів: {n}', { n: flown.length })}`] : null]),
@@ -593,7 +596,7 @@ function historyList(list) {
 function slotRow(d, s) {
   const it = findItem(s.itemId);
   return h('div', { class: 'row slot' },
-    h('span', { class: 'row-main', onclick: it ? () => itemDetail(it.id) : null },
+    h(it ? 'button' : 'span', { type: it ? 'button' : null, class: 'row-main', onclick: it ? () => itemDetail(it.id) : null },
       h('span', { class: 'muted small' }, slotLabel(s)),
       h('span', { class: 'row-title' }, it ? itemName(it) : '—'),
       it?.fw ? h('span', { class: 'muted small' }, `${t('Прошивка')}: ${it.fw}`, fwHint(it) ? h('span', { class: 'fw-new' }, ` · ${fwHint(it)}`) : null) : null),
@@ -700,7 +703,7 @@ function noteForm(d) {
     { name: 'date', label: t('Дата'), type: 'dmy', value: today(), required: true },
     { name: 'text', label: t('Текст'), type: 'textarea', rows: 5, required: true },
   ]);
-  const pick = btn(t('Додати фото'), () => pickFile((x) => { file = x; pick.textContent = `✓ ${x.name}`; }));
+  const pick = btn(t('Додати фото'), () => pickFile((x) => { file = x; pick.textContent = t('Фото: {name}', { name: x.name }); }));
   const close = sheet(t('Нотатка'), h('div', {}, f.el, h('div', { class: 'btn-row' }, pick)), {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(f)) return;
@@ -717,7 +720,7 @@ function noteForm(d) {
 function noteView(d, n) {
   const close = sheet(fmt.date(n.date), h('div', {},
     h('p', { class: 'pre' }, n.text),
-    n.photoId && findPhoto(n.photoId) ? h('img', { class: 'drone-photo', src: findPhoto(n.photoId).thumb, alt: '', onclick: () => showPhoto(n.photoId, dronePhotos(findDrone(d.id) ?? d)) }) : null), {
+    n.photoId && findPhoto(n.photoId) ? photoBtn(findPhoto(n.photoId).thumb, () => showPhoto(n.photoId, dronePhotos(findDrone(d.id) ?? d))) : null), {
     tools: [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити нотатку?'), '', t('Видалити'), async () => {
       close();
       const cur = findDrone(d.id);
@@ -863,7 +866,7 @@ function stockAddMenu() {
 function wishRow(w) {
   return h('div', { class: 'row slot', dataset: { id: w.id } },
     thumbImg(w.photoId, null),
-    h('span', { class: 'row-main', onclick: () => wishForm(w) },
+    h('button', { type: 'button', class: 'row-main', onclick: () => wishForm(w) },
       h('span', { class: 'row-title' }, w.name),
       h('span', { class: 'muted small' }, [w.price ? `${fmt.num(w.price)} ${w.currency === 'USD' ? '$' : t('грн')}` : null, findDrone(w.droneId)?.name, w.note].filter(Boolean).join(' · '))),
     btn(t('У замовлення'), () => wishToOrder(w), 'quiet'));
@@ -935,10 +938,10 @@ function itemForm(it = null, { preset = {}, onSaved = null, file = null } = {}) 
   const f = form(fields);
   const name = () => `${f.inputs.brand.value} ${f.inputs.model.value}`.trim();
   // Характеристики — з сайту виробника чи магазину: пошук у Google за брендом і моделлю, текст вставляють у поле
-  f.inputs.specs.closest('.field').after(h('div', { class: 'specs-find' }, btn(`🔍 ${t('Характеристики')}`, () => {
+  f.inputs.specs.closest('.field').after(h('div', { class: 'specs-find' }, btn([icon('search'), t('Характеристики')], () => {
     if (!name()) { toast(t('Спершу впишіть назву')); return; }
     window.open(`https://www.google.com/search?q=${encodeURIComponent(`${name()} ${t('характеристики')}`)}`, '_blank', 'noopener');
-  }, 'mini')));
+  }, 'mini with-ico')));
   const pic = photoPicker(it?.photoId, {
     file, query: name,
     onSearch: () => remember(PHOTO_FOR, JSON.stringify({ kind: 'item', id: it?.id ?? null, draft: it ? null : { ...f.values(), kind } })),
@@ -982,7 +985,7 @@ function itemBody(it) {
         it.status !== 'broken' ? btn(t('Зламана'), () => brokenSheet(it)) : null,
         it.status !== 'sold' ? btn(t('Продано / списано'), () => soldSheet(it)) : null];
   return h('div', {},
-    photo ? h('img', { class: 'drone-photo', src: photo.thumb, alt: '', onclick: () => showPhoto(photo.id) }) : null,
+    photo ? photoBtn(photo.thumb, () => showPhoto(photo.id)) : null,
     kv([
       [t('Категорія'), catLabel(it.cat)],
       cons ? [t('Кількість'), h('span', { class: isLow(it) ? 'warn-text' : '' }, `${fmt.num(it.qty)} ${t('шт')}${isLow(it) ? ` · ${t('мало')}` : ''}`)] : [t('Стан'), t(STATUS[it.status ?? 'stock'])],
@@ -1831,18 +1834,20 @@ function syncBody() {
 }
 
 const CHIP = {
-  idle: () => `☁ ✓ ${fmt.time(sync.status.lastSync)}`,
-  syncing: () => '☁ ',
-  offline: () => t('☁ офлайн'),
-  auth: () => t('☁ увійти'),
-  error: () => t('☁ помилка'),
+  idle: () => fmt.time(sync.status.lastSync),
+  syncing: () => '',
+  offline: () => t('офлайн'),
+  auth: () => t('увійти'),
+  error: () => t('помилка'),
 };
 
 function renderSyncChip(s) {
   const chip = $('sync-chip');
   chip.hidden = !CHIP[s.state];
   if (CHIP[s.state]) {
-    chip.textContent = CHIP[s.state]();
+    const text = CHIP[s.state]();
+    chip.replaceChildren(icon('cloud'), text);
+    chip.setAttribute('aria-label', `${t('Google Диск')}: ${text || t('синхронізація…')}`);
     if (s.state === 'syncing') chip.append(h('span', { class: 'sync-dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')));
     chip.className = `sync-chip ${s.state}`;
     chip.title = s.message || t('Синхронізація з Google Диском');
@@ -2162,7 +2167,10 @@ function render() {
   $('view').replaceChildren(body);
   $('fab').hidden = !view.fab || Boolean($('view').querySelector('.empty .btn.add'));
   $('fab').classList.remove('away');
-  document.querySelectorAll('.tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
+  document.querySelectorAll('.tabs a').forEach((a) => {
+    a.classList.toggle('active', a.dataset.tab === tab);
+    if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
   document.querySelector('.tabs a[data-tab="batteries"]').classList.toggle('alert', staleBatteries().length > 0);
 }
 
