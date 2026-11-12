@@ -22,8 +22,34 @@ const CATS = [
   ['vtx', 'VTX'], ['camera', 'Камера'], ['rx', 'Приймач'], ['gps', 'GPS'], ['antenna', 'Антена'], ['props', 'Пропелери'],
   ['vrx', 'Модуль VRX (відеоприймач)'], ['txmodule', 'Модуль пульта'], ['gbattery', 'Батарея шолома'], ['charger', 'Зарядка'], ['tool', 'Інструмент'], ['other', 'Інше'],
 ];
-const catLabel = (k) => t(CATS.find(([c]) => c === k)?.[1] ?? 'Інше');
-const catOptions = () => CATS.map(([k, l]) => [k, t(l)]);
+// Категорії можна перейменувати, дати інший значок, переставити, сховати з вибору й додати свої (⚙ → Категорії).
+// Налаштування — у prefs, запис на категорію (id «cat:<ключ>»): правки з двох пристроїв зливаються поштучно.
+// Ключ категорії не змінюється ніколи — від нього залежить логіка (мотори 1–4, прошивка польотника, слоти).
+const CAT_ICON = { frame: 'wrench', motors: 'prop', fc: 'chip', esc: 'chip', stack: 'chip', aio: 'chip', vtx: 'wind', camera: 'camera', rx: 'globe',
+  gps: 'globe', antenna: 'globe', props: 'prop', vrx: 'camera', txmodule: 'chip', gbattery: 'battery', charger: 'battery', tool: 'wrench', other: 'note' };
+const CAT_ICONS = [['chip', 'Плата'], ['prop', 'Пропелер'], ['camera', 'Камера'], ['globe', 'Антена'], ['wind', 'Вітер'], ['battery', 'Батарея'],
+  ['wrench', 'Інструмент'], ['stock', 'Склад'], ['note', 'Нотатка'], ['receipt', 'Чек'], ['database', 'Банки'], ['cloud', 'Хмара'],
+  ['code', 'Код'], ['gallery', 'Фото'], ['palette', 'Палітра'], ['heart', 'Серце'], ['list', 'Список'], ['chart', 'Графік'], ['info', 'Інфо']];
+const NEW_CAT = '+new';
+const catPrefs = () => new Map(state.prefs.filter((p) => String(p.id).startsWith('cat:')).map((p) => [p.key, p]));
+let catMemo = { prefs: null, list: [] };
+/** Усі категорії в порядку людини: [{ key, name, icon, order, hidden, own }]; пам'ять — до наступного читання бази. */
+function allCats() {
+  if (catMemo.prefs === state.prefs) return catMemo.list;
+  const pr = catPrefs();
+  const mine = (p) => (p ? Object.fromEntries(['name', 'icon', 'hidden', 'order'].filter((k) => p[k] !== undefined && p[k] !== null && p[k] !== '').map((k) => [k, p[k]])) : {});
+  const base = CATS.map(([key, name], i) => ({ key, name: t(name), icon: CAT_ICON[key] ?? 'note', order: i, hidden: false, own: false, ...mine(pr.get(key)) }));
+  const own = [...pr.values()].filter((p) => p.own && p.name).map((p) => ({ key: p.key, name: p.name, icon: p.icon || 'note', order: num(p.order ?? 999), hidden: false, own: true }));
+  catMemo = { prefs: state.prefs, list: [...base, ...own].sort((a, b) => a.order - b.order) };
+  return catMemo.list;
+}
+const findCat = (k) => allCats().find((c) => c.key === k);
+// Схована категорія лишається з назвою на наявних деталях; невідома (видалена на іншому пристрої) — «Інше»
+const catLabel = (k) => findCat(k)?.name ?? findCat('other')?.name ?? t('Інше');
+/** Пункти вибору: сховані — лише якщо вже вибрані; наприкінці — «+ Нова категорія…». */
+const catOptions = (cur) => [...allCats().filter((c) => !c.hidden || c.key === cur).map((c) => [c.key, c.name]), [NEW_CAT, t('+ Нова категорія…')]];
+/** Значок категорії замість фото в рядку складу. */
+const catThumb = (k) => h('span', { class: 'thumb cat-thumb', 'aria-hidden': 'true' }, icon(findCat(k)?.icon ?? 'note'));
 
 const KINDS = [['self', 'Самозбір'], ['bnf', 'Готовий (BNF)'], ['goggles', 'Шолом'], ['radio', 'Пульт']];
 const kindLabel = (k) => t(KINDS.find(([x]) => x === k)?.[1] ?? '');
@@ -726,8 +752,9 @@ async function replaceSlot(droneId, slotId, newId, outcome, reason, flightId = n
 function slotForm(d) {
   const f = form([
     { name: 'label', label: t('Назва слота'), required: true, placeholder: t('напр. Бузер') },
-    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(), value: 'other' },
+    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions('other'), value: 'other' },
   ]);
+  newCatOption(f.inputs.cat);
   const close = sheet(t('Новий слот'), f.el, {
     actions: [btn(t('Скасувати'), () => close()), btn(t('Додати'), async () => {
       if (invalidField(f)) return;
@@ -845,9 +872,9 @@ const isLow = (it) => it.kind === 'consumable' && num(it.qty) <= num(it.low);
 function itemRow(it) {
   const where = it.status === 'installed' ? findDrone(it.droneId)?.name : it.status === 'broken' ? it.reason : '';
   if (it.kind === 'consumable') {
-    return row(itemName(it), catLabel(it.cat), `${fmt.num(it.qty)} ${t('шт')}`, () => itemDetail(it.id), { id: it.id, cls: isLow(it) ? 'low' : '', thumb: thumbImg(it.photoId, null) });
+    return row(itemName(it), catLabel(it.cat), `${fmt.num(it.qty)} ${t('шт')}`, () => itemDetail(it.id), { id: it.id, cls: isLow(it) ? 'low' : '', thumb: thumbImg(it.photoId, null) ?? catThumb(it.cat) });
   }
-  return row(itemName(it), [catLabel(it.cat), it.fw, fwHint(it), where].filter(Boolean).join(' · '), it.price ? fmt.uah(it.price) : '', () => itemDetail(it.id), { id: it.id, thumb: thumbImg(it.photoId, null) });
+  return row(itemName(it), [catLabel(it.cat), it.fw, fwHint(it), where].filter(Boolean).join(' · '), it.price ? fmt.uah(it.price) : '', () => itemDetail(it.id), { id: it.id, thumb: thumbImg(it.photoId, null) ?? catThumb(it.cat) });
 }
 
 // Відбір за дроном у «Хочу» й журналі польотів: «Усі» + дрони, що є в списку; спільний вибір, пам'ятається
@@ -986,7 +1013,7 @@ function itemForm(it = null, { preset = {}, onSaved = null, file = null } = {}) 
   const kind = src.kind ?? 'unit';
   const cons = kind === 'consumable';
   const fields = [
-    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(), value: src.cat ?? (cons ? 'props' : 'other') },
+    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(src.cat), value: src.cat ?? (cons ? 'props' : 'other') },
     { name: 'brand', label: t('Бренд'), value: src.brand, half: true },
     { name: 'model', label: t('Модель'), value: src.model, half: true, required: true },
     { name: 'specs', label: t('Характеристики'), type: 'textarea', rows: 2, value: src.specs },
@@ -995,6 +1022,7 @@ function itemForm(it = null, { preset = {}, onSaved = null, file = null } = {}) 
   else if (!it) fields.push({ name: 'fw', label: t('Прошивка'), placeholder: 'Betaflight 4.5.1', value: src.fw });
   if (!it?.orderId) fields.push({ name: 'price', label: t('Ціна, грн'), type: 'number', value: src.price, half: true }, { name: 'buyDate', label: t('Куплено'), type: 'dmy', value: src.buyDate, half: true });
   const f = form(fields);
+  newCatOption(f.inputs.cat);
   const name = () => `${f.inputs.brand.value} ${f.inputs.model.value}`.trim();
   // Характеристики — з сайту виробника чи магазину: пошук у Google за брендом і моделлю, текст вставляють у поле
   f.inputs.specs.closest('.field').after(h('div', { class: 'specs-find' }, btn([icon('search'), t('Характеристики')], () => {
@@ -1179,12 +1207,13 @@ function orderForm(o = null, draft = null) {
   const addLine = (l = {}) => {
     const lf = form([
       { name: 'kind', label: t('Вид'), type: 'select', options: [['unit', t('Деталь')], ['consumable', t('Розхідник')], ['drone', t('Дрон чи шолом цілим')]], value: l.kind ?? 'unit', half: true },
-      { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(), value: l.cat ?? 'other', half: true },
+      { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(l.cat), value: l.cat ?? 'other', half: true },
       { name: 'brand', label: t('Бренд'), value: l.brand, half: true },
       { name: 'model', label: t('Модель'), value: l.model, half: true, required: true },
       { name: 'price', label: t('Ціна за шт.'), type: 'number', value: l.price, half: true, required: true },
       { name: 'qty', label: t('Кількість'), type: 'number', value: l.qty ?? 1, half: true, required: true },
     ]);
+    newCatOption(lf.inputs.cat);
     const entry = { id: l.id ?? db.uid(), itemIds: l.itemIds ?? [], f: lf };
     const el = h('div', { class: 'line' }, lf.el, h('button', { type: 'button', class: 'link-btn', onclick: () => { lineForms.splice(lineForms.indexOf(entry), 1); el.remove(); } }, t('Прибрати позицію')));
     lineForms.push(entry);
@@ -2224,6 +2253,152 @@ function staleRow() {
     }, 'primary'))]);
 }
 
+function catsRow() {
+  const list = allCats();
+  const own = list.filter((c) => c.own).length;
+  const hidden = list.filter((c) => c.hidden).length;
+  return setRow('cats', 'chip', t('Категорії'), String(list.length - hidden), [
+    h('p', { class: 'muted small' }, t('Порядок і назви — як у виборі категорії деталі. Вбудовані можна перейменувати, дати інший значок чи сховати; свої — додати й видалити.')),
+    own || hidden ? h('p', { class: 'muted small' }, [own ? t('своїх: {n}', { n: own }) : null, hidden ? t('схованих: {n}', { n: hidden }) : null].filter(Boolean).join(' · ')) : null,
+    h('div', { class: 'btn-row' }, btn(t('Змінити категорії'), catsSheet, 'primary'))]);
+}
+
+/** ⚙ → Категорії: перетягнути за ручку (чи стрілками ↑↓ на ній), дотик — назва, значок, «сховати», «+ Нова категорія». */
+function catsSheet() {
+  const build = () => {
+    const list = allCats();
+    return h('div', {},
+      h('p', { class: 'muted small' }, t('Перетягніть за ручку ⋮⋮ (або стрілками ↑↓ на ній), щоб змінити порядок у виборі. Дотик — назва, значок, «сховати».')),
+      h('div', { class: 'rows cat-rows' }, list.map((c, i) => catRow(c, i, list))),
+      h('div', { class: 'btn-row' }, btn(t('+ Нова категорія'), () => catForm(), 'primary')));
+  };
+  sheet(t('Категорії'), build(), { live: build });
+}
+
+function catRow(c, i, list) {
+  const n = state.items.filter((it) => it.cat === c.key).length;
+  const handle = h('button', {
+    type: 'button', class: 'drag-handle', 'aria-label': t('Перемістити «{name}» — стрілки вгору чи вниз', { name: c.name }),
+    onkeydown: (e) => {
+      const d = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+      if (d) { e.preventDefault(); moveCat(list, i, i + d, true); }
+    },
+    onpointerdown: (e) => dragCat(e, list, i),
+  }, '⋮⋮');
+  return h('div', { class: `row slot cat-row${c.hidden ? ' cat-hidden' : ''}`, dataset: { key: c.key } }, handle, toolIcon(c.icon),
+    h('button', { type: 'button', class: 'row-main', onclick: () => catForm(c) },
+      h('span', { class: 'row-title' }, c.name),
+      h('span', { class: 'muted small' }, [c.own ? t('своя') : null, c.hidden ? t('схована з вибору') : null, t('деталей: {n}', { n })].filter(Boolean).join(' · '))));
+}
+
+/** Категорію з місця from — на місце to; пишемо order лише тим, у кого він змінився. */
+async function moveCat(list, from, to, keepFocus = false) {
+  if (to < 0 || to >= list.length || to === from) return;
+  const keys = list.map((c) => c.key);
+  keys.splice(to, 0, ...keys.splice(from, 1));
+  const pr = catPrefs();
+  const put = keys.map((key, i) => [key, i]).filter(([key, i]) => findCat(key).order !== i)
+    .map(([key, i]) => ({ ...(pr.get(key) ?? { id: `cat:${key}`, key }), order: i }));
+  await save({ prefs: { put } });
+  if (keepFocus) document.querySelector(`.cat-row[data-key="${CSS.escape(keys[to])}"] .drag-handle`)?.focus();
+}
+
+/** Перетягування за ручку: рядок їде за пальцем, місце — за серединами сусідів; скрол шторки не чіпаємо (touch-action: none на ручці). */
+function dragCat(e, list, from) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const handle = e.currentTarget;
+  const rowEl = handle.closest('.cat-row');
+  const rects = [...rowEl.parentElement.children].map((r) => r.getBoundingClientRect());
+  const y0 = e.clientY;
+  let to = from;
+  try { handle.setPointerCapture(e.pointerId); } catch { /* вказівник уже відпущено */ }
+  rowEl.classList.add('dragging');
+  const move = (ev) => {
+    const dy = ev.clientY - y0;
+    rowEl.style.transform = `translateY(${dy}px)`;
+    const mid = rects[from].top + rects[from].height / 2 + dy;
+    to = rects.filter((r, k) => k !== from && r.top + r.height / 2 < mid).length;
+  };
+  const end = (ev) => {
+    handle.removeEventListener('pointermove', move);
+    handle.removeEventListener('pointerup', end);
+    handle.removeEventListener('pointercancel', end);
+    rowEl.style.transform = '';
+    rowEl.classList.remove('dragging');
+    if (ev.type === 'pointerup') moveCat(list, from, to);
+  };
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+}
+
+/** Категорія: назва й значок; вбудовану — ще сховати з вибору, свою — видалити. onSaved(ключ) — для «+ Нова категорія…» у формі. */
+function catForm(c = null, onSaved = null) {
+  let ico = c?.icon ?? 'note';
+  let hidden = Boolean(c?.hidden);
+  const builtin = c && !c.own;
+  const f = form([{ name: 'name', label: t('Назва'), value: c?.name, required: true, placeholder: t('напр. Буззер') }]);
+  const icons = h('div', { class: 'chips icon-pick', role: 'group', 'aria-label': t('Значок') });
+  const paint = () => icons.replaceChildren(...CAT_ICONS.map(([k, label]) => h('button', {
+    type: 'button', class: k === ico ? 'on' : '', 'aria-pressed': String(k === ico), 'aria-label': t(label), title: t(label),
+    onclick: () => { ico = k; paint(); },
+  }, icon(k))));
+  paint();
+  const hide = builtin && c.key !== 'other' ? chips([['', t('Показувати')], ['1', t('Сховати')]], hidden ? '1' : '', (v) => { hidden = v === '1'; }) : null;
+  hide?.classList.add('segmented');
+  const original = builtin ? t(CATS.find(([k]) => k === c.key)?.[1] ?? '') : '';
+  const close = sheet(c ? t('Категорія') : t('Нова категорія'), h('div', {},
+    f.el, h('div', { class: 'field-label' }, t('Значок')), icons,
+    hide ? [h('div', { class: 'field-label' }, t('У виборі категорії')), hide,
+      h('p', { class: 'muted small' }, t('Схована зникає з вибору для нових деталей; наявні деталі лишаються з нею й з її назвою.'))] : null,
+    builtin ? h('p', { class: 'muted small' }, t('Вбудована («{name}»): від неї залежать слоти й прошивки, тож її можна перейменувати чи сховати, але не видалити.', { name: original })) : null), {
+    tools: c?.own ? [toolBtn('delete', t('Видалити'), () => { close(); removeCat(c); }, 'danger')] : [],
+    actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
+      if (invalidField(f)) return;
+      const name = String(f.values().name).trim();
+      const key = c?.key ?? `u-${db.uid()}`;
+      const order = c?.order ?? Math.max(-1, ...allCats().map((x) => x.order)) + 1;
+      close();
+      await save({ prefs: { put: [{ ...(catPrefs().get(key) ?? { id: `cat:${key}`, key }), name, icon: ico, order, ...(builtin ? { hidden } : { own: true }) }] } });
+      onSaved?.(key);
+      if (!c) toast(t('Категорію «{name}» додано', { name }));
+    }, 'primary')],
+  });
+}
+
+/** Своя категорія: її деталі, позиції замовлень і слоти — в «Інше»; «Скасувати» повертає все як було. */
+async function removeCat(c) {
+  const rec = catPrefs().get(c.key);
+  if (!rec) return;
+  const items = state.items.filter((it) => it.cat === c.key);
+  const orders = state.orders.filter((o) => o.lines?.some((l) => l.cat === c.key));
+  const drones = state.drones.filter((d) => d.slots?.some((sl) => sl.cat === c.key));
+  await save({
+    prefs: { del: [rec.id] },
+    items: { put: items.map((it) => ({ ...it, cat: 'other' })) },
+    orders: { put: orders.map((o) => ({ ...o, lines: o.lines.map((l) => (l.cat === c.key ? { ...l, cat: 'other' } : l)) })) },
+    drones: { put: drones.map((d) => ({ ...d, slots: d.slots.map((sl) => (sl.cat === c.key ? { ...sl, cat: 'other' } : sl)) })) },
+  });
+  toast(items.length ? t('Категорію «{name}» видалено, деталі ({n}) — в «{other}»', { name: c.name, n: items.length, other: catLabel('other') }) : t('Категорію «{name}» видалено', { name: c.name }),
+    { action: t('Скасувати'), onAction: () => save({ prefs: { put: [rec] }, items: { put: items }, orders: { put: orders }, drones: { put: drones } }) });
+}
+
+/** «+ Нова категорія…» у виборі: та сама форма, що в ⚙ → Категорії; збережена — одразу вибрана, скасували — лишається попередня. */
+function newCatOption(select) {
+  let prev = select.value;
+  select.addEventListener('change', () => {
+    if (select.value !== NEW_CAT) { prev = select.value; return; }
+    select.value = prev;
+    catForm(null, (key) => {
+      select.replaceChildren(...selectOptions(catOptions(key), key));
+      select.value = key;
+      prev = key;
+      select.dispatchEvent(new Event('change'));
+    });
+  });
+}
+
 function aboutRow() {
   const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener' }, text);
   return setRow('about', 'info', t('Про застосунок'), self.APP_VERSION, h('section', { class: 'panel about' },
@@ -2244,6 +2419,7 @@ function renderSettings() {
   return h('div', { class: 'settings' },
     settingsGroup(t('Дані'), [syncRow(), backupRow(), marnotratRow(), demoRow(), wipeRow()]),
     settingsGroup(t('Вигляд'), [themeRow(), backdropRow()]),
+    settingsGroup(t('Склад'), [catsRow()]),
     settingsGroup(t('Батареї'), [staleRow()]),
     settingsGroup(t('Застосунок'), [aboutRow()]));
 }

@@ -782,3 +782,13 @@ button.row-main { padding: 0; border: 0; background: none; color: inherit; font:
 .slot-fold > summary { flex-wrap: wrap; }
 .slot-fold > summary .row-title { flex: 1 1 100%; padding-left: 16px; }
 .verdict-nums { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--muted); }
+/* Значок категорії замість фото в рядку складу */
+.thumb.cat-thumb { display: grid; place-items: center; color: var(--muted); }
+.cat-thumb .ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+/* ⚙ → Категорії: ручка перетягування; рух пальцем по ній не скролить шторку */
+.cat-row { gap: 8px; }
+.drag-handle { flex: none; min-width: 36px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 18px; letter-spacing: -3px; cursor: grab; touch-action: none; }
+.cat-row.dragging { position: relative; z-index: 2; box-shadow: 0 8px 22px rgb(0 0 0 / .35); }
+.cat-row.cat-hidden .row-title { color: var(--muted); }
+.icon-pick button { display: grid; place-items: center; width: 44px; min-height: 44px; padding: 0; }
+.icon-pick .ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
