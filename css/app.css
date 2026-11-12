@@ -677,6 +677,13 @@ pre.config { max-height: 60vh; overflow: auto; padding: 10px; border-radius: 10p
 .lines { display: flex; flex-direction: column; gap: 10px; }
 .line { padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
 .line > .link-btn { margin-top: 8px; font-size: 13px; }
+.stats.wide { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.bars { display: grid; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 7em) 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.bar-track { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.bar-fill { display: block; height: 100%; border-radius: 6px; background: var(--accent); }
+.bar-val { min-width: 5.5em; text-align: right; font-variant-numeric: tabular-nums; }
 .bat-states { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
 .app-icon.big { width: 48px; height: 48px; border-radius: 12px; }
 

@@ -2,7 +2,7 @@
 // Інфраструктура (база, синхронізація, шторки, теми, «Що нового») — з shooting-log.
 import * as db from './db.js';
 import * as sync from './sync.js';
-import { t, lang, setLang, LANGS, collate, applyStatic } from './i18n.js';
+import { t, lang, setLang, LANGS, collate, applyStatic, locale } from './i18n.js';
 import { prepare as preparePhoto } from './photos.js';
 import { rateOn, refreshRates } from './usd.js';
 import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
@@ -995,16 +995,60 @@ function cycleSheet(b) {
 const flightMin = (f) => (f.bats ?? []).reduce((n, x) => n + num(x.min), 0);
 const batLabel = (id) => { const b = findBattery(id); return b ? `#${b.num}` : '—'; };
 
+const FLIGHT_SEGS = [['log', 'Журнал'], ['stats', 'Статистика']];
+let flightSeg = recall('fpv-log:flight-seg') === 'stats' ? 'stats' : 'log';
+
 function renderFlights() {
   const list = [...state.flights].sort((a, b) => collate(b.date, a.date) || num(b.created) - num(a.created));
   if (!list.length) {
     return h('div', {}, staleBanner(), empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
       state.drones.length ? [btn(t('Додати'), () => flightForm(), 'primary add')] : []));
   }
-  return h('div', {}, staleBanner(),
-    h('div', { class: 'rows' }, list.map((f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
+  const seg = chips(FLIGHT_SEGS.map(([k, l]) => [k, t(l)]), flightSeg, (v) => { flightSeg = v; remember('fpv-log:flight-seg', v); render(); });
+  seg.classList.add('segmented');
+  return h('div', {}, staleBanner(), seg, flightSeg === 'stats' ? renderStats() : h('div', { class: 'rows' }, list.map((f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
       [fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' '), f.crash ? `${t('падіння')}${f.broke ? `: ${f.broke}` : ''}` : ''].filter(Boolean).join(' · '),
       fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' }))));
+}
+
+/** Горизонтальні смуги: [[підпис, значення]], довжина — частка найбільшого. */
+function bars(list, format) {
+  const max = Math.max(1, ...list.map(([, v]) => v));
+  return h('div', { class: 'bars' }, list.map(([label, v]) => h('div', { class: 'bar-row' },
+    h('span', { class: 'bar-label' }, label),
+    h('span', { class: 'bar-track' }, h('span', { class: 'bar-fill', style: `width:${((v / max) * 100).toFixed(1)}%` })),
+    h('span', { class: 'bar-val' }, format(v)))));
+}
+
+/** Статистика: польоти, наліт, ціна хвилини (вкладено ÷ хвилини), ремонт (вартість зламаних деталей), наліт за місяцями й дронами. */
+function renderStats() {
+  const mins = state.flights.reduce((n, f) => n + flightMin(f), 0);
+  const repair = state.items.reduce((s, it) => s + (it.status === 'broken' ? num(it.price) : 0), 0);
+  const stat = (label, value, cls = '') => h('div', { class: `stat ${cls}` }, h('div', { class: 'stat-value' }, value), h('div', { class: 'muted small' }, label));
+  const sum = (key) => {
+    const m = new Map();
+    for (const f of state.flights) m.set(key(f), (m.get(key(f)) ?? 0) + flightMin(f));
+    return m;
+  };
+  // Місяці — до 12 по останній місяць із польотами, порожні теж: видно перерви
+  const byMonth = sum((f) => f.date.slice(0, 7));
+  const months = [];
+  const keys = [...byMonth.keys()].sort();
+  for (let ym = keys.at(-1); ym >= keys[0] && months.length < 12;) {
+    months.unshift([new Date(`${ym}-01T00:00:00`).toLocaleDateString(locale(), { month: 'short', year: '2-digit' }), byMonth.get(ym) ?? 0]);
+    const [y, mo] = ym.split('-').map(Number);
+    ym = mo > 1 ? `${y}-${String(mo - 1).padStart(2, '0')}` : `${y - 1}-12`;
+  }
+  const byDrone = [...sum((f) => f.droneId)].map(([id, v]) => [findDrone(id)?.name ?? t('Видалений дрон'), v]).sort((a, b) => b[1] - a[1]);
+  return h('div', {},
+    h('div', { class: 'stats wide' },
+      stat(t('Польотів'), fmt.num(state.flights.length)),
+      stat(t('Наліт'), fmtMin(mins)),
+      stat(t('Хвилина польоту'), mins ? fmt.money(invested() / mins) : '—', 'accent'),
+      stat(t('Ремонт (зламане)'), fmt.money(repair))),
+    h('p', { class: 'muted small' }, t('Хвилина польоту — «Вкладено в хобі» ({sum}), поділене на хвилини нальоту.', { sum: fmt.money(invested()) })),
+    box(t('Наліт за місяцями'), bars(months, fmtMin)),
+    box(t('Наліт за дронами'), bars(byDrone, fmtMin)));
 }
 
 /** Політ: батареї з хвилинами; кожна отримує цикл (cycles[].flightId), наліт дрона рахується з польотів. */
