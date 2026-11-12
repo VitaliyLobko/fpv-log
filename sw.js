@@ -9,6 +9,8 @@ const ASSETS = [
   './demo.json',
   './starter.json',
   './css/app.css',
+  './css/topo.svg',
+  './css/topo-light.svg',
   './js/app.js',
   './js/config.js',
   './js/db.js',

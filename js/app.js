@@ -1022,9 +1022,27 @@ function nightLevel() {
   return v >= 20 && v <= 100 ? v : 80;
 }
 
+// Фон під картками: темний набір — для «Темної» й «Лайму» (спільний вибір), світлий — для «Світлої», у спецрежимах немає
+const BACKDROPS = {
+  dark: [['plain', 'Без малюнка'], ['carbon', 'Карбон'], ['map', 'Карта'], ['grid', 'Сітка OSD']],
+  light: [['l-plain', 'Без малюнка'], ['l-map', 'Карта'], ['l-grid', 'Сітка OSD']],
+};
+const bgFamily = (theme) => (theme === 'light' ? 'light' : theme === 'dark' || theme === 'lime' ? 'dark' : null);
+const BG_KEY = { dark: 'fpv-log:bg', light: 'fpv-log:bg-light' };
+
+function backdropPref(fam) {
+  const list = BACKDROPS[fam];
+  if (!list) return null;
+  const v = recall(BG_KEY[fam]);
+  return list.some(([k]) => k === v) ? v : list[0][0];
+}
+
 function applyTheme() {
   const pref = themePref();
-  document.documentElement.dataset.theme = pref === 'auto' ? (lightScheme.matches ? 'light' : 'dark') : pref;
+  const theme = pref === 'auto' ? (lightScheme.matches ? 'light' : 'dark') : pref;
+  document.documentElement.dataset.theme = theme;
+  const bg = backdropPref(bgFamily(theme));
+  if (bg && !bg.endsWith('plain')) document.documentElement.dataset.bg = bg; else delete document.documentElement.dataset.bg;
   const k = nightLevel() / 100;
   document.querySelector('#night-red feColorMatrix')?.setAttribute('values',
     `${(0.5 * k).toFixed(3)} ${(0.6 * k).toFixed(3)} ${(0.1 * k).toFixed(3)} 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0`);
@@ -1189,6 +1207,16 @@ function themeRow() {
         oninput: (e) => { remember('fpv-log:night-level', e.target.value); applyTheme(); } })) : null]);
 }
 
+function backdropRow() {
+  const fam = bgFamily(document.documentElement.dataset.theme);
+  const list = BACKDROPS[fam];
+  if (!list) return null;
+  const now = backdropPref(fam);
+  const c = chips(list.map(([k, label]) => [k, t(label)]), now, (v) => { remember(BG_KEY[fam], v); applyTheme(); render(); });
+  c.classList.add('segmented');
+  return setRow('backdrop', 'gallery', t('Фон'), t(list.find(([k]) => k === now)[1]), [c]);
+}
+
 function staleRow() {
   const input = h('input', { type: 'number', min: '1', max: '30', inputmode: 'numeric', value: String(staleDays()) });
   return setRow('stale', 'battery', t('Заряджена довше'), t('{n} дн.', { n: staleDays() }), [
@@ -1221,7 +1249,7 @@ function renderSettings() {
   return h('div', { class: 'settings' },
     settingsGroup(t('Про застосунок'), [aboutPanel()]),
     settingsGroup(t('Дані'), [syncRow(), backupRow(), demoRow(), wipeRow()]),
-    settingsGroup(t('Вигляд'), [langRow(), themeRow()]),
+    settingsGroup(t('Вигляд'), [langRow(), themeRow(), backdropRow()]),
     settingsGroup(t('Батареї'), [staleRow()]));
 }
 

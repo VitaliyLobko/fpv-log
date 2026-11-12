@@ -107,7 +107,8 @@ html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(120% 60% at 50% -10%, var(--bg-glow), var(--bg) 60%) fixed, var(--bg);
+  background: var(--paper, radial-gradient(120% 60% at 50% -10%, var(--bg-glow), var(--bg) 60%) var(--bg));
+  background-attachment: fixed;
   color: var(--text);
   font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   padding-bottom: calc(var(--tabs-h) + env(safe-area-inset-bottom) + 100px);
@@ -674,3 +675,25 @@ pre.config { max-height: 60vh; overflow: auto; padding: 10px; border-radius: 10p
 .line > .link-btn { margin-top: 8px; font-size: 13px; }
 .bat-states { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
 .app-icon.big { width: 48px; height: 48px; border-radius: 12px; }
+
+/* Фон під картками (⚙ → Вигляд → Фон). Темний набір — для «Темної» й «Лайму», світлий — для «Світлої», у спецрежимах фону немає.
+   Відблиск у куті — від --accent, тож бірюзовий і лаймовий кожен свій */
+[data-bg="carbon"] { --paper: radial-gradient(70% 40% at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%),
+  radial-gradient(120% 80% at 50% 40%, transparent 45%, rgb(0 0 0 / .5)),
+  linear-gradient(27deg, #111314 5px, transparent 5px) 0 5px / 20px 20px, linear-gradient(207deg, #111314 5px, transparent 5px) 10px 0 / 20px 20px,
+  linear-gradient(27deg, #1a1c1e 5px, transparent 5px) 0 10px / 20px 20px, linear-gradient(207deg, #1a1c1e 5px, transparent 5px) 10px 5px / 20px 20px,
+  linear-gradient(90deg, #151718 10px, transparent 10px) 0 0 / 20px 20px,
+  linear-gradient(#16181a 25%, #141617 25%, #141617 50%, transparent 50%, transparent 75%, #1c1e20 75%, #1c1e20) 0 0 / 20px 20px, #131516; }
+[data-bg="map"] { --paper: radial-gradient(70% 40% at 100% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+  url(topo.svg) center / cover no-repeat, linear-gradient(180deg, var(--bg-glow) 0%, var(--bg) 100%); }
+/* Сітка — як OSD у шоломі: дрібна клітинка, раз на 5 — яскравіша лінія */
+[data-bg="grid"] { --paper: radial-gradient(120% 80% at 50% 30%, transparent 40%, rgb(0 0 0 / .55)),
+  linear-gradient(color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,
+  linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,
+  linear-gradient(color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px) 0 0 / 20px 20px,
+  linear-gradient(90deg, color-mix(in srgb, var(--accent) 6%, transparent) 1px, transparent 1px) 0 0 / 20px 20px, var(--bg); }
+[data-bg="l-map"] { --paper: linear-gradient(rgb(255 255 255 / .35) 0 0), url(topo-light.svg) center / cover no-repeat, var(--bg); }
+[data-bg="l-grid"] { --paper: linear-gradient(color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,
+  linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,
+  linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px) 0 0 / 20px 20px,
+  linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px) 0 0 / 20px 20px, var(--bg); }
