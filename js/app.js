@@ -488,12 +488,13 @@ function replaceSheet(droneId, slotId, preset = {}) {
       if (cur && outcome === 'broken' && !r) { fieldError(reason.inputs.reason, t('Вкажіть причину')); return; }
       if ((select.value || null) === (s.itemId || null)) { close(); return; }
       close();
-      await replaceSlot(droneId, slotId, select.value || null, outcome, r);
+      await replaceSlot(droneId, slotId, select.value || null, outcome, r, preset.flightId);
     }, 'primary')],
   });
 }
 
-async function replaceSlot(droneId, slotId, newId, outcome, reason) {
+/** flightId — зламана в падінні цього польоту: brokeIn пам'ятає, звідки зняли, щоб видалення польоту могло повернути деталь. */
+async function replaceSlot(droneId, slotId, newId, outcome, reason, flightId = null) {
   const d = findDrone(droneId);
   const s = d.slots.find((x) => x.id === slotId);
   const old = findItem(s.itemId);
@@ -501,10 +502,10 @@ async function replaceSlot(droneId, slotId, newId, outcome, reason) {
   const where = { d: d.name, slot: slotLabel(s) };
   const put = [];
   if (old) {
-    put.push(logged({ ...old, status: outcome === 'broken' ? 'broken' : 'stock', droneId: null, ...(outcome === 'broken' ? { reason } : {}) },
+    put.push(logged({ ...old, status: outcome === 'broken' ? 'broken' : 'stock', droneId: null, brokeIn: outcome === 'broken' && flightId ? { flightId, droneId, slotId } : null, ...(outcome === 'broken' ? { reason } : {}) },
       outcome === 'broken' ? t('Знято з «{d}» ({slot}), зламана: {r}', { ...where, r: reason }) : t('Знято з «{d}» ({slot}) на склад', where)));
   }
-  if (nw) put.push(logged({ ...nw, status: 'installed', droneId: d.id }, t('Встановлено на «{d}» ({slot})', where)));
+  if (nw) put.push(logged({ ...nw, status: 'installed', droneId: d.id, brokeIn: null }, t('Встановлено на «{d}» ({slot})', where)));
   const text = `${slotLabel(s)}: ${old ? itemName(old) : '—'} → ${nw ? itemName(nw) : '—'}${old && outcome === 'broken' ? ` (${t('зламана')}: ${reason})` : ''}`;
   const drone = logged({ ...d, slots: d.slots.map((x) => (x.id === slotId ? { ...x, itemId: newId || null } : x)) }, text);
   await save({ drones: { put: [drone] }, items: { put } }, [d.id, ...put.map((x) => x.id)]);
@@ -660,7 +661,7 @@ const byDroneFilter = (list) => list.filter((x) => !droneFilter || !list.some((y
 
 function renderStock() {
   const seg = chips(STOCK_SEGS.map(([k, l]) => [k, t(l)]), stockSeg, (v) => { stockSeg = v; remember('fpv-log:stock-seg', v); render(); });
-  seg.classList.add('segmented');
+  seg.classList.add('segmented', 'seg-fit');
   const byName = (a, b) => collate(catLabel(a.cat), catLabel(b.cat)) || collate(itemName(a), itemName(b));
   let body;
   if (stockSeg === 'orders') {
@@ -823,7 +824,7 @@ function itemBody(it) {
 }
 
 async function setStatus(it, status, extra, text) {
-  await save({ items: { put: [logged({ ...it, status, droneId: null, ...extra }, text)] } }, [it.id]);
+  await save({ items: { put: [logged({ ...it, status, droneId: null, brokeIn: null, ...extra }, text)] } }, [it.id]);
 }
 
 function brokenSheet(it) {
@@ -1203,7 +1204,7 @@ function renderFlights() {
   // Порожній журнал — без статистики, але «Перед польотом» потрібне й до першого польоту
   const segs = list.length ? FLIGHT_SEGS : FLIGHT_SEGS.filter(([k]) => k !== 'stats');
   const seg = chips(segs.map(([k, l]) => [k, t(l)]), segs.some(([k]) => k === flightSeg) ? flightSeg : 'log', (v) => { flightSeg = v; remember('fpv-log:flight-seg', v); render(); });
-  seg.classList.add('segmented');
+  seg.classList.add('segmented', 'seg-fit');
   if (flightSeg === 'pre') return h('div', {}, staleBanner(), seg, renderPreflight());
   if (!list.length) {
     return h('div', {}, staleBanner(), seg, empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
@@ -1442,6 +1443,7 @@ function flightForm(f = null) {
       close();
       await save(flightChanges(null, f));
       toast(t('Видалено'));
+      unbreakSheet(f);
     }), 'danger')] : [],
     actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
       if (invalidField(head) || batForms.some(({ f: bf }) => invalidField(bf))) return;
@@ -1458,8 +1460,29 @@ function flightForm(f = null) {
       remember('fpv-log:flight-drone', v.droneId);
       close();
       await save(flightChanges(rec, f), [rec.id]);
-      if (rec.crash && c.slotId) replaceSheet(rec.droneId, c.slotId, { outcome: 'broken', reason: [c.broke, t('падіння {date}', { date: fmt.date(rec.date) })].filter(Boolean).join(', ') });
+      if (rec.crash && c.slotId) replaceSheet(rec.droneId, c.slotId, { outcome: 'broken', flightId: rec.id, reason: [c.broke, t('падіння {date}', { date: fmt.date(rec.date) })].filter(Boolean).join(', ') });
     }, 'primary')],
+  });
+}
+
+/**
+ * Видалили політ, у падінні якого деталь позначили зламаною (і вона досі зламана) — запропонувати повернути:
+ * у той самий слот, якщо він порожній, інакше на склад.
+ */
+function unbreakSheet(f) {
+  const list = state.items.filter((it) => it.status === 'broken' && it.brokeIn?.flightId === f.id);
+  if (!list.length) return;
+  confirmSheet(t('Повернути деталі?'), t('У падінні цього польоту зламаними позначено: {list}. Повернути їх у слот (якщо він вільний) або на склад?', { list: list.map(itemName).join(', ') }), t('Повернути'), async () => {
+    const drones = new Map();
+    const items = list.map((it) => {
+      const d = drones.get(it.brokeIn.droneId) ?? findDrone(it.brokeIn.droneId);
+      const s = d?.slots.find((x) => x.id === it.brokeIn.slotId);
+      const rec = { ...it, brokeIn: null, reason: null };
+      if (!s || s.itemId) return logged({ ...rec, status: 'stock', droneId: null }, t('Політ видалено — повернуто на склад'));
+      drones.set(d.id, logged({ ...d, slots: d.slots.map((x) => (x.id === s.id ? { ...x, itemId: it.id } : x)) }, `${slotLabel(s)}: — → ${itemName(it)} (${t('політ видалено')})`));
+      return logged({ ...rec, status: 'installed', droneId: d.id }, t('Політ видалено — повернуто на «{d}» ({slot})', { d: d.name, slot: slotLabel(s) }));
+    });
+    await save({ items: { put: items }, drones: { put: [...drones.values()] } }, items.map((it) => it.id));
   });
 }
 

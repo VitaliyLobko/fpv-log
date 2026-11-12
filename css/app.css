@@ -766,3 +766,8 @@ span.ir-max::before { background: var(--warn); }
   font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; }
 .wx b { font-size: 10.5px; font-weight: 600; color: var(--muted); }
 .fw-new { color: var(--accent-2); font-weight: 600; }
+/* Сегменти з довгими назвами («Замовлення», «Перед польотом»): ширина за текстом, а не порівну — на 360px не обрізаються */
+.chips.segmented.seg-fit { grid-auto-columns: auto; }
+.chips.segmented.seg-fit button { padding-inline: 6px; }
+/* «Налаштування» — найдовша назва вкладки: на вузькому екрані дрібніше, щоб влізло ціле */
+@media (max-width: 400px) { .tabs a { font-size: 10px; letter-spacing: -.01em; } }
