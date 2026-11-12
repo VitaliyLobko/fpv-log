@@ -696,7 +696,7 @@ span.ir-max::before { background: var(--warn); }
 .wx { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px 4px; padding: 10px; border-radius: 12px; background: var(--surface-2);
   font-size: 14px; text-align: center; font-variant-numeric: tabular-nums; }
 .wx b { font-size: 10.5px; font-weight: 600; color: var(--muted); }
-.fw-new { color: var(--accent-2); font-weight: 600; }
+.fw-new { color: var(--muted); }
 /* Сегменти з довгими назвами («Замовлення», «Перед польотом»): ширина за текстом, а не порівну — на 360px не обрізаються */
 .chips.segmented.seg-fit { grid-auto-columns: auto; }
 .chips.segmented.seg-fit button { padding-inline: 6px; }
