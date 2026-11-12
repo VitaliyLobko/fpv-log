@@ -212,6 +212,13 @@ const droneOwn = (d) => { const b = boughtLine(d); return b ? lineUah(b.o, b.l) 
 const droneCost = (d) => droneOwn(d) + d.slots.reduce((s, sl) => s + num(findItem(sl.itemId)?.price), 0);
 
 /** Вкладено в хобі: замовлення + куплене без замовлення + дрони й батареї − продане. Дрон із позиції замовлення вже в замовленні. */
+/** Скільки куплених речей без ціни: «Вкладено 0 грн» при повному складі інакше виглядає як помилка. */
+function unpriced() {
+  return state.items.filter((it) => !it.orderId && !num(it.price) && it.kind !== 'consumable').length
+    + state.drones.filter((d) => !boughtLine(d) && !num(d.price) && d.kind !== 'self').length
+    + state.batteries.filter((b) => !num(b.price)).length;
+}
+
 function invested() {
   return state.orders.reduce((s, o) => s + orderTotal(o), 0)
     + state.items.reduce((s, it) => s + (it.orderId ? 0 : num(it.price)) - (it.status === 'sold' ? num(it.soldPrice) : 0), 0)
@@ -866,14 +873,20 @@ function renderStock() {
   } else {
     const units = state.items.filter((it) => it.kind !== 'consumable').sort(byName);
     // Групи за станом згортаються; «На дроні» (коли довга) й «Продано» — згорнуті, поки їх не відкрили: головне — що лежить на складі
-    body = units.length ? h('div', {}, Object.keys(STATUS).map((st) => {
+    // «На дроні» — окрема група на кожен дрон з його назвою: одна купа «На дроні · 18» не каже, де що стоїть
+    const group = (key, title, list, open) => fold(key, `${title} · ${list.length}`, h('div', { class: 'rows' }, list.map(itemRow)), { cls: 'group', open });
+    body = units.length ? h('div', {}, Object.keys(STATUS).flatMap((st) => {
       const list = units.filter((it) => (it.status ?? 'stock') === st);
-      return list.length ? fold(`stock-${st}`, `${t(STATUS[st])} · ${list.length}`, h('div', { class: 'rows' }, list.map(itemRow)),
-        { cls: 'group', open: st === 'stock' || st === 'broken' || (st === 'installed' && list.length <= 5) }) : null;
+      if (!list.length) return [];
+      if (st !== 'installed') return [group(`stock-${st}`, t(STATUS[st]), list, st === 'stock' || st === 'broken')];
+      const ids = [...new Set(list.map((it) => it.droneId))];
+      return ids.map((id) => [id, findDrone(id)?.name ?? '—']).sort((a, b) => collate(a[1], b[1]))
+        .map(([id, name]) => group(`stock-on-${id}`, t('На «{name}»', { name }), list.filter((it) => it.droneId === id), false));
     })) : empty(t('Склад порожній'), t('Додайте замовлення або деталь, що вже була, кнопкою «+».'));
   }
   return h('div', {},
-    h('section', { class: 'hero' }, h('div', { class: 'hero-label' }, t('Вкладено в хобі')), h('div', { class: 'hero-value' }, fmt.uah(invested()))),
+    h('section', { class: 'hero' }, h('div', { class: 'hero-label' }, t('Вкладено в хобі')), h('div', { class: 'hero-value' }, fmt.uah(invested())),
+      unpriced() ? h('div', { class: 'muted small' }, t('Без ціни: {n} — не враховано. Допишіть ціну в картці деталі, дрона чи батареї.', { n: unpriced() })) : null),
     seg, body);
 }
 
