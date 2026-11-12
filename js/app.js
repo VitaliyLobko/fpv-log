@@ -605,6 +605,21 @@ function itemRow(it) {
   return row(itemName(it), [catLabel(it.cat), it.fw, where].filter(Boolean).join(' · '), it.price ? fmt.money(it.price) : '', () => itemDetail(it.id), { id: it.id });
 }
 
+// Відбір за дроном у «Хочу» й журналі польотів: «Усі» + дрони, що є в списку; спільний вибір, пам'ятається
+let droneFilter = recall('fpv-log:drone-filter') ?? '';
+const NO_DRONE = '-';
+
+function droneFilterChips(list) {
+  const ids = [...new Set(list.map((x) => x.droneId || NO_DRONE))];
+  if (ids.length < 2) return null;
+  const opts = ids.map((id) => [id, id === NO_DRONE ? t('Без дрона') : findDrone(id)?.name ?? '—']).sort((a, b) => collate(a[1], b[1]));
+  const c = chips([['', t('Усі')], ...opts], ids.includes(droneFilter) ? droneFilter : '', (v) => { droneFilter = v; remember('fpv-log:drone-filter', v); render(); });
+  c.classList.add('drone-filter');
+  return c;
+}
+
+const byDroneFilter = (list) => list.filter((x) => !droneFilter || !list.some((y) => (y.droneId || NO_DRONE) === droneFilter) || (x.droneId || NO_DRONE) === droneFilter);
+
 function renderStock() {
   const seg = chips(STOCK_SEGS.map(([k, l]) => [k, t(l)]), stockSeg, (v) => { stockSeg = v; remember('fpv-log:stock-seg', v); render(); });
   seg.classList.add('segmented');
@@ -616,8 +631,19 @@ function renderStock() {
       row(o.shop || t('Замовлення'), `${fmt.date(o.date)} · ${t('позицій: {n}', { n: o.lines.length })}`, fmt.money(orderTotal(o)), () => orderForm(o), { id: o.id })))
       : empty(t('Замовлень немає'), t('Покупка — це замовлення: магазин, дата, позиції й доставка. Позиції одразу лягають на склад.'));
   } else if (stockSeg === 'wish') {
-    const list = [...state.wishes].sort((a, b) => collate(a.name, b.name));
-    body = list.length ? h('div', { class: 'rows' }, list.map(wishRow))
+    const all = state.wishes;
+    const list = byDroneFilter(all);
+    // Групи за дроном із сумою: одразу видно, скільки коштує збірка
+    const groups = [...new Set(list.map((w) => w.droneId || NO_DRONE))]
+      .map((id) => [id, id === NO_DRONE ? t('Без дрона') : findDrone(id)?.name ?? '—']).sort((a, b) => collate(a[1], b[1]));
+    const total = (ws) => ['UAH', 'USD'].map((c) => {
+      const s = ws.reduce((n, w) => n + (w.currency === c ? num(w.price) : 0), 0);
+      return s ? `${fmt.num(s)} ${c === 'USD' ? '$' : t('грн')}` : null;
+    }).filter(Boolean).join(' + ');
+    body = all.length ? h('div', {}, droneFilterChips(all), groups.map(([id, name]) => {
+      const ws = list.filter((w) => (w.droneId || NO_DRONE) === id).sort((a, b) => collate(a.name, b.name));
+      return box([name, ws.length, total(ws)].filter(Boolean).join(' · '), h('div', { class: 'rows' }, ws.map(wishRow)));
+    }))
       : empty(t('Список «Хочу купити» порожній'), t('Що придивилися: назва, посилання, орієнтовна ціна й для якого дрона. Одним дотиком — у чернетку замовлення.'),
         [btn(t('Додати'), () => wishForm(), 'primary add')]);
   } else if (stockSeg === 'cons') {
@@ -1062,9 +1088,9 @@ function renderFlights() {
   }
   const seg = chips(FLIGHT_SEGS.map(([k, l]) => [k, t(l)]), flightSeg, (v) => { flightSeg = v; remember('fpv-log:flight-seg', v); render(); });
   seg.classList.add('segmented');
-  return h('div', {}, staleBanner(), seg, flightSeg === 'stats' ? renderStats() : h('div', { class: 'rows' }, list.map((f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
+  return h('div', {}, staleBanner(), seg, flightSeg === 'stats' ? renderStats() : h('div', {}, droneFilterChips(list), h('div', { class: 'rows' }, byDroneFilter(list).map((f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
       [fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' '), f.crash ? `${t('падіння')}${f.broke ? `: ${f.broke}` : ''}` : ''].filter(Boolean).join(' · '),
-      fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' }))));
+      fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' })))));
 }
 
 /** Горизонтальні смуги: [[підпис, значення]], довжина — частка найбільшого. */

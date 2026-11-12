@@ -721,3 +721,5 @@ pre.config { max-height: 60vh; overflow: auto; padding: 10px; border-radius: 10p
   linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent) 1px, transparent 1px) 0 0 / 100px 100px,
   linear-gradient(color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px) 0 0 / 20px 20px,
   linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px) 0 0 / 20px 20px, var(--bg); }
+.drone-filter { flex-wrap: nowrap; overflow-x: auto; margin-block: 4px 10px; scrollbar-width: none; }
+.drone-filter > * { flex: none; }
