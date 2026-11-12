@@ -21,7 +21,26 @@
      {
       "id": "demo-s2",
       "cat": "motors",
-      "itemId": "demo-motors"
+      "tpl": "Мотор 1",
+      "itemId": "demo-mot1"
+     },
+     {
+      "id": "demo-s2-m2",
+      "cat": "motors",
+      "tpl": "Мотор 2",
+      "itemId": "demo-mot5"
+     },
+     {
+      "id": "demo-s2-m3",
+      "cat": "motors",
+      "tpl": "Мотор 3",
+      "itemId": "demo-mot3"
+     },
+     {
+      "id": "demo-s2-m4",
+      "cat": "motors",
+      "tpl": "Мотор 4",
+      "itemId": "demo-mot4"
      },
      {
       "id": "demo-s3",
@@ -101,7 +120,79 @@
      },
      {
       "date": "2025-06-02",
-      "text": "Мотори: T-Motor Velox V2207 1950KV ×4 → T-Motor Velox V2207 1950KV ×4 (зламана: погнутий вал після падіння)"
+      "text": "Мотор 2: T-Motor Velox V2207 1950KV → T-Motor Velox V2207 1950KV (зламана: погнутий вал після падіння)"
+     }
+    ]
+   },
+   {
+    "id": "demo-m75",
+    "name": "Демо Meteor75 HD",
+    "kind": "bnf",
+    "group": "drone",
+    "price": null,
+    "buyDate": null,
+    "buy": {
+     "orderId": "demo-ord2",
+     "lineId": "demo-l5"
+    },
+    "updated": 1,
+    "slots": [
+     {
+      "id": "demo-m75-s1",
+      "cat": "frame",
+      "itemId": null
+     },
+     {
+      "id": "demo-m75-s2",
+      "cat": "aio",
+      "itemId": null
+     },
+     {
+      "id": "demo-m75-s3",
+      "cat": "motors",
+      "itemId": null,
+      "tpl": "Мотор 1"
+     },
+     {
+      "id": "demo-m75-s4",
+      "cat": "motors",
+      "itemId": null,
+      "tpl": "Мотор 2"
+     },
+     {
+      "id": "demo-m75-s5",
+      "cat": "motors",
+      "itemId": null,
+      "tpl": "Мотор 3"
+     },
+     {
+      "id": "demo-m75-s6",
+      "cat": "motors",
+      "itemId": null,
+      "tpl": "Мотор 4"
+     },
+     {
+      "id": "demo-m75-s7",
+      "cat": "camera",
+      "itemId": null
+     },
+     {
+      "id": "demo-m75-s8",
+      "cat": "vtx",
+      "itemId": null
+     },
+     {
+      "id": "demo-m75-s9",
+      "cat": "props",
+      "itemId": null
+     }
+    ],
+    "notes": [],
+    "configs": [],
+    "history": [
+     {
+      "date": "2025-07-04",
+      "text": "Заведено"
      }
     ]
    },
@@ -151,7 +242,7 @@
     "model": "Source One V5 5″",
     "orderId": "demo-ord1",
     "buyDate": "2025-03-10",
-    "price": 2023.04,
+    "price": 2070.08,
     "fwLog": [],
     "updated": 1,
     "history": [
@@ -162,54 +253,6 @@
     ],
     "status": "installed",
     "droneId": "demo-quad"
-   },
-   {
-    "id": "demo-motors",
-    "kind": "unit",
-    "cat": "motors",
-    "brand": "T-Motor",
-    "model": "Velox V2207 1950KV ×4",
-    "orderId": "demo-ord1",
-    "buyDate": "2025-03-10",
-    "price": 3596.51,
-    "fwLog": [],
-    "updated": 1,
-    "history": [
-     {
-      "date": "2025-03-10",
-      "text": "Куплено: GetFPV"
-     },
-     {
-      "date": "2025-06-02",
-      "text": "Встановлено на «Демо 5″ Walksnail» (Мотори)"
-     }
-    ],
-    "status": "installed",
-    "droneId": "demo-quad"
-   },
-   {
-    "id": "demo-motors-old",
-    "kind": "unit",
-    "cat": "motors",
-    "brand": "T-Motor",
-    "model": "Velox V2207 1950KV ×4",
-    "orderId": "demo-ord1",
-    "buyDate": "2025-03-10",
-    "price": 3596.51,
-    "fwLog": [],
-    "updated": 1,
-    "history": [
-     {
-      "date": "2025-03-10",
-      "text": "Куплено: GetFPV"
-     },
-     {
-      "date": "2025-06-02",
-      "text": "Знято з «Демо 5″ Walksnail» (Мотори), зламана: погнутий вал після падіння"
-     }
-    ],
-    "status": "broken",
-    "reason": "погнутий вал після падіння"
    },
    {
     "id": "demo-stack",
@@ -219,7 +262,7 @@
     "model": "F405 V4 BLS 55A stack",
     "orderId": "demo-ord1",
     "buyDate": "2025-03-10",
-    "price": 3146.95,
+    "price": 3220.13,
     "fwLog": [
      {
       "date": "2025-03-20",
@@ -397,6 +440,150 @@
     "status": "stock",
     "updated": 1,
     "history": []
+   },
+   {
+    "id": "demo-mot1",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "T-Motor",
+    "model": "Velox V2207 1950KV",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 920.04,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     },
+     {
+      "date": "2025-03-20",
+      "text": "Встановлено на «Демо 5″ Walksnail» (Мотор 1)"
+     }
+    ],
+    "status": "installed",
+    "droneId": "demo-quad"
+   },
+   {
+    "id": "demo-mot2",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "T-Motor",
+    "model": "Velox V2207 1950KV",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 920.04,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     },
+     {
+      "date": "2025-03-20",
+      "text": "Встановлено на «Демо 5″ Walksnail» (Мотор 2)"
+     },
+     {
+      "date": "2025-06-02",
+      "text": "Знято з «Демо 5″ Walksnail» (Мотор 2), зламана: погнутий вал після падіння"
+     }
+    ],
+    "status": "broken",
+    "reason": "погнутий вал після падіння"
+   },
+   {
+    "id": "demo-mot3",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "T-Motor",
+    "model": "Velox V2207 1950KV",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 920.04,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     },
+     {
+      "date": "2025-03-20",
+      "text": "Встановлено на «Демо 5″ Walksnail» (Мотор 3)"
+     }
+    ],
+    "status": "installed",
+    "droneId": "demo-quad"
+   },
+   {
+    "id": "demo-mot4",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "T-Motor",
+    "model": "Velox V2207 1950KV",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 920.04,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     },
+     {
+      "date": "2025-03-20",
+      "text": "Встановлено на «Демо 5″ Walksnail» (Мотор 4)"
+     }
+    ],
+    "status": "installed",
+    "droneId": "demo-quad"
+   },
+   {
+    "id": "demo-mot5",
+    "kind": "unit",
+    "cat": "motors",
+    "brand": "T-Motor",
+    "model": "Velox V2207 1950KV",
+    "orderId": "demo-ord1",
+    "buyDate": "2025-03-10",
+    "price": 920.04,
+    "fwLog": [],
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-03-10",
+      "text": "Куплено: GetFPV"
+     },
+     {
+      "date": "2025-06-02",
+      "text": "Встановлено на «Демо 5″ Walksnail» (Мотор 2)"
+     }
+    ],
+    "status": "installed",
+    "droneId": "demo-quad"
+   },
+   {
+    "id": "demo-cons3",
+    "kind": "consumable",
+    "cat": "props",
+    "brand": "Gemfan",
+    "model": "45 мм 3-лопатеві",
+    "orderId": "demo-ord2",
+    "buyDate": "2025-07-04",
+    "qty": 4,
+    "low": 2,
+    "price": 717.22,
+    "status": "stock",
+    "updated": 1,
+    "history": [
+     {
+      "date": "2025-07-04",
+      "text": "Куплено: BETAFPV"
+     }
+    ]
    }
   ],
   "orders": [
@@ -426,11 +613,15 @@
       "kind": "unit",
       "cat": "motors",
       "brand": "T-Motor",
-      "model": "Velox V2207 1950KV ×4",
-      "price": 80,
-      "qty": 1,
+      "model": "Velox V2207 1950KV",
+      "price": 20,
+      "qty": 5,
       "itemIds": [
-       "demo-motors"
+       "demo-mot1",
+       "demo-mot2",
+       "demo-mot3",
+       "demo-mot4",
+       "demo-mot5"
       ]
      },
      {
@@ -444,21 +635,43 @@
       "itemIds": [
        "demo-stack"
       ]
-     },
-     {
-      "id": "demo-l4",
-      "kind": "unit",
-      "cat": "motors",
-      "brand": "T-Motor",
-      "model": "Velox V2207 1950KV ×4",
-      "price": 80,
-      "qty": 1,
-      "itemIds": [
-       "demo-motors-old"
-      ]
      }
     ],
     "updated": 1
+   },
+   {
+    "id": "demo-ord2",
+    "shop": "BETAFPV",
+    "date": "2025-07-04",
+    "currency": "USD",
+    "rate": 41.4,
+    "shipping": 12,
+    "note": "",
+    "updated": 1,
+    "lines": [
+     {
+      "id": "demo-l5",
+      "kind": "drone",
+      "cat": "other",
+      "brand": "BETAFPV",
+      "model": "Meteor75 Pro HD",
+      "price": 129,
+      "qty": 1,
+      "itemIds": []
+     },
+     {
+      "id": "demo-l6",
+      "kind": "consumable",
+      "cat": "props",
+      "brand": "Gemfan",
+      "model": "45 мм 3-лопатеві",
+      "price": 4,
+      "qty": 4,
+      "itemIds": [
+       "demo-cons3"
+      ]
+     }
+    ]
    }
   ],
   "batteries": [
@@ -477,15 +690,66 @@
     "updated": 1,
     "cycles": [
      {
-      "id": "demo-cy1",
+      "id": "demo-f1-0",
       "date": "2025-03-22",
+      "flightId": "demo-f1",
       "v": "3.72",
       "ir": "4, 4, 5, 4, 4, 5"
      },
      {
-      "id": "demo-cy2",
+      "id": "demo-f2-0",
+      "date": "2025-04-12",
+      "flightId": "demo-f2",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f3-0",
+      "date": "2025-04-27",
+      "flightId": "demo-f3",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f3-2",
+      "date": "2025-04-27",
+      "flightId": "demo-f3",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f4-0",
+      "date": "2025-05-18",
+      "flightId": "demo-f4",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f5-0",
       "date": "2025-06-02",
+      "flightId": "demo-f5",
       "v": "3.65",
+      "ir": ""
+     },
+     {
+      "id": "demo-f7-0",
+      "date": "2025-07-20",
+      "flightId": "demo-f7",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f9-0",
+      "date": "2025-09-14",
+      "flightId": "demo-f9",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f10-0",
+      "date": "2025-10-05",
+      "flightId": "demo-f10",
+      "v": "",
       "ir": ""
      }
     ]
@@ -505,12 +769,348 @@
     "updated": 1,
     "cycles": [
      {
-      "id": "demo-cy3",
+      "id": "demo-f1-1",
       "date": "2025-03-22",
+      "flightId": "demo-f1",
       "v": "3.70",
+      "ir": ""
+     },
+     {
+      "id": "demo-f2-1",
+      "date": "2025-04-12",
+      "flightId": "demo-f2",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f3-1",
+      "date": "2025-04-27",
+      "flightId": "demo-f3",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f4-1",
+      "date": "2025-05-18",
+      "flightId": "demo-f4",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f7-1",
+      "date": "2025-07-20",
+      "flightId": "demo-f7",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f9-1",
+      "date": "2025-09-14",
+      "flightId": "demo-f9",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f10-1",
+      "date": "2025-10-05",
+      "flightId": "demo-f10",
+      "v": "",
       "ir": ""
      }
     ]
+   },
+   {
+    "id": "demo-b3",
+    "num": "3",
+    "brand": "BETAFPV LAVA",
+    "s": 1,
+    "mah": 550,
+    "c": 75,
+    "connector": "BT2.0",
+    "price": 260,
+    "buyDate": "2025-07-04",
+    "state": "storage",
+    "stateAt": 1760000000000,
+    "updated": 1,
+    "cycles": [
+     {
+      "id": "demo-f6-0",
+      "date": "2025-07-06",
+      "flightId": "demo-f6",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f8-0",
+      "date": "2025-08-09",
+      "flightId": "demo-f8",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f8-2",
+      "date": "2025-08-09",
+      "flightId": "demo-f8",
+      "v": "",
+      "ir": ""
+     }
+    ]
+   },
+   {
+    "id": "demo-b4",
+    "num": "4",
+    "brand": "BETAFPV LAVA",
+    "s": 1,
+    "mah": 550,
+    "c": 75,
+    "connector": "BT2.0",
+    "price": 260,
+    "buyDate": "2025-07-04",
+    "state": "storage",
+    "stateAt": 1760000000000,
+    "updated": 1,
+    "cycles": [
+     {
+      "id": "demo-f6-1",
+      "date": "2025-07-06",
+      "flightId": "demo-f6",
+      "v": "",
+      "ir": ""
+     },
+     {
+      "id": "demo-f8-1",
+      "date": "2025-08-09",
+      "flightId": "demo-f8",
+      "v": "",
+      "ir": ""
+     }
+    ]
+   }
+  ],
+  "flights": [
+   {
+    "id": "demo-f1",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-03-22",
+    "place": "Поле за селом",
+    "droneId": "demo-quad",
+    "type": "freestyle",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 4.5
+     },
+     {
+      "batteryId": "demo-b2",
+      "min": 4
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": "Перший політ, rates жорсткі"
+   },
+   {
+    "id": "demo-f2",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-04-12",
+    "place": "Поле за селом",
+    "droneId": "demo-quad",
+    "type": "freestyle",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 5
+     },
+     {
+      "batteryId": "demo-b2",
+      "min": 5
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": ""
+   },
+   {
+    "id": "demo-f3",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-04-27",
+    "place": "Кар’єр",
+    "droneId": "demo-quad",
+    "type": "freestyle",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 4
+     },
+     {
+      "batteryId": "demo-b2",
+      "min": 4.5
+     },
+     {
+      "batteryId": "demo-b1",
+      "min": 4
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": "Пірнання в кар’єр"
+   },
+   {
+    "id": "demo-f4",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-05-18",
+    "place": "Озеро",
+    "droneId": "demo-quad",
+    "type": "long",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 7
+     },
+     {
+      "batteryId": "demo-b2",
+      "min": 6.5
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": "GPS Rescue перевірено"
+   },
+   {
+    "id": "demo-f5",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-06-02",
+    "place": "Кар’єр",
+    "droneId": "demo-quad",
+    "type": "freestyle",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 3
+     }
+    ],
+    "crash": true,
+    "broke": "вал мотора 2, пропелер",
+    "note": "Зачепив дерево"
+   },
+   {
+    "id": "demo-f6",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-07-06",
+    "place": "Двір",
+    "droneId": "demo-m75",
+    "type": "other",
+    "bats": [
+     {
+      "batteryId": "demo-b3",
+      "min": 3.5
+     },
+     {
+      "batteryId": "demo-b4",
+      "min": 3.5
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": "Тінівуп у дворі"
+   },
+   {
+    "id": "demo-f7",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-07-20",
+    "place": "Поле за селом",
+    "droneId": "demo-quad",
+    "type": "freestyle",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 5
+     },
+     {
+      "batteryId": "demo-b2",
+      "min": 5
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": ""
+   },
+   {
+    "id": "demo-f8",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-08-09",
+    "place": "Ліс",
+    "droneId": "demo-m75",
+    "type": "freestyle",
+    "bats": [
+     {
+      "batteryId": "demo-b3",
+      "min": 3
+     },
+     {
+      "batteryId": "demo-b4",
+      "min": 3
+     },
+     {
+      "batteryId": "demo-b3",
+      "min": 2.5
+     }
+    ],
+    "crash": true,
+    "broke": "пропелер",
+    "note": ""
+   },
+   {
+    "id": "demo-f9",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-09-14",
+    "place": "Озеро",
+    "droneId": "demo-quad",
+    "type": "long",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 8
+     },
+     {
+      "batteryId": "demo-b2",
+      "min": 7.5
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": ""
+   },
+   {
+    "id": "demo-f10",
+    "created": 1,
+    "updated": 1,
+    "date": "2025-10-05",
+    "place": "Кар’єр",
+    "droneId": "demo-quad",
+    "type": "freestyle",
+    "bats": [
+     {
+      "batteryId": "demo-b1",
+      "min": 4.5
+     },
+     {
+      "batteryId": "demo-b2",
+      "min": 4.5
+     }
+    ],
+    "crash": false,
+    "broke": "",
+    "note": ""
    }
   ]
  }

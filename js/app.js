@@ -7,7 +7,7 @@ import { prepare as preparePhoto } from './photos.js';
 import { rateOn, refreshRates } from './usd.js';
 import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
 
-let state = { drones: [], items: [], orders: [], batteries: [], photos: [], prefs: [] };
+let state = { drones: [], items: [], orders: [], batteries: [], flights: [], photos: [], prefs: [] };
 let tab = 'drones';
 
 const $ = (id) => document.getElementById(id);
@@ -40,6 +40,8 @@ const STATUS = { stock: 'На складі', installed: 'На дроні', broke
 const BAT_STATES = [['charged', 'Заряджена'], ['storage', 'Зберігання'], ['empty', 'Розряджена'], ['dead', 'Здута / списана']];
 const batStateLabel = (k) => t(BAT_STATES.find(([x]) => x === k)?.[1] ?? '');
 const CONNECTORS = ['XT60', 'XT30', 'BT2.0', 'PH2.0', 'A30', 'XT90'];
+const FLIGHT_TYPES = [['freestyle', 'Фрістайл'], ['long', 'Дальній'], ['other', 'Інше']];
+const flightTypeLabel = (k) => t(FLIGHT_TYPES.find(([x]) => x === k)?.[1] ?? 'Інше');
 
 // ---------- дрібниці ----------
 
@@ -51,6 +53,8 @@ function today(when = new Date()) {
 const addDays = (date, n) => new Date(Date.parse(date) + n * 864e5).toISOString().slice(0, 10);
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const num = (v) => Number(v) || 0;
+/** Хвилини нальоту: «45 хв», «3 год 20 хв». */
+const fmtMin = (m) => { const n = Math.round(num(m)); return n >= 60 ? t('{h} год {m} хв', { h: Math.floor(n / 60), m: n % 60 }) : t('{m} хв', { m: n }); };
 
 function remember(key, value) {
   try { localStorage.setItem(key, value ?? ''); } catch { /* приватний режим */ }
@@ -388,10 +392,12 @@ function droneDetail(id) {
 function droneBody(d) {
   const photo = findPhoto(d.photoId);
   const b = boughtLine(d);
+  const flown = state.flights.filter((f) => f.droneId === d.id);
   return h('div', {},
     photo ? h('img', { class: 'drone-photo', src: photo.thumb, alt: '', onclick: () => showPhoto(photo.id, dronePhotos(d)) }) : null,
     kv([[t('Тип'), kindLabel(d.kind)], [t('Вартість'), fmt.money(droneCost(d))],
-      [t('Куплено'), b ? `${b.o.shop} · ${fmt.date(b.o.date)}` : d.buyDate ? fmt.date(d.buyDate) : null]]),
+      [t('Куплено'), b ? `${b.o.shop} · ${fmt.date(b.o.date)}` : d.buyDate ? fmt.date(d.buyDate) : null],
+      flown.length ? [t('Наліт'), `${fmtMin(flown.reduce((n, f) => n + flightMin(f), 0))} · ${t('польотів: {n}', { n: flown.length })}`] : null]),
     box(t('Збірка'), h('div', {},
       h('div', { class: 'rows' }, d.slots.map((s) => slotRow(d, s))),
       h('div', { class: 'btn-row' }, btn(t('+ Слот'), () => slotForm(d))))),
@@ -437,7 +443,8 @@ function copyText(text) {
 }
 
 /** «Замінити»: нова деталь зі складу (або порожньо); зняту — на склад чи «зламана» з причиною. Історія — у дрона й обох деталей. */
-function replaceSheet(droneId, slotId) {
+/** preset — { outcome: 'broken', reason } з польоту з падінням: знята деталь одразу «зламана» з причиною. */
+function replaceSheet(droneId, slotId, preset = {}) {
   const d = findDrone(droneId);
   const s = d.slots.find((x) => x.id === slotId);
   const cur = findItem(s.itemId);
@@ -446,9 +453,9 @@ function replaceSheet(droneId, slotId) {
   const select = h('select', { name: 'item' }, selectOptions([['', t('— порожньо —')],
     { group: t('Підходять'), options: fits.map((it) => [it.id, itemName(it)]) },
     { group: t('Інше на складі'), options: free.filter((it) => it.cat !== s.cat).map((it) => [it.id, `${itemName(it)} (${catLabel(it.cat)})`]) }], ''));
-  let outcome = 'stock';
-  const reason = form([{ name: 'reason', label: t('Причина'), placeholder: t('напр. погнутий вал після падіння') }]);
-  reason.el.hidden = true;
+  let outcome = preset.outcome ?? 'stock';
+  const reason = form([{ name: 'reason', label: t('Причина'), value: preset.reason, placeholder: t('напр. погнутий вал після падіння') }]);
+  reason.el.hidden = outcome !== 'broken';
   const out = chips([['stock', t('На склад')], ['broken', t('Зламана')]], outcome, (v) => { outcome = v; reason.el.hidden = v !== 'broken'; });
   out.classList.add('segmented');
   const close = sheet(`${t('Замінити')}: ${slotLabel(s)}`, h('div', {},
@@ -961,7 +968,7 @@ function batteryBody(b) {
     h('div', { class: 'field-label' }, t('Стан')), states,
     h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary')),
     b.cycles?.length ? box(t('Цикли'), h('ul', { class: 'changes' }, [...b.cycles].reverse().map((c) => h('li', {},
-      [fmt.date(c.date), c.v && `${c.v} ${t('В/банку')}`, c.ir && `IR ${c.ir} ${t('мОм')}`].filter(Boolean).join(' · '))))) : null);
+      [fmt.date(c.date), c.flightId && t('політ'), c.v && `${c.v} ${t('В/банку')}`, c.ir && `IR ${c.ir} ${t('мОм')}`].filter(Boolean).join(' · '))))) : null);
 }
 
 function cycleSheet(b) {
@@ -981,6 +988,123 @@ function cycleSheet(b) {
       await save({ batteries: { put: [{ ...b, cycles: [...(b.cycles ?? []), { id: db.uid(), ...v }], state: after, stateAt: Date.now() }] } }, [b.id]);
     }, 'primary')],
   });
+}
+
+// ---------- польоти ----------
+
+const flightMin = (f) => (f.bats ?? []).reduce((n, x) => n + num(x.min), 0);
+const batLabel = (id) => { const b = findBattery(id); return b ? `#${b.num}` : '—'; };
+
+function renderFlights() {
+  const list = [...state.flights].sort((a, b) => collate(b.date, a.date) || num(b.created) - num(a.created));
+  if (!list.length) {
+    return h('div', {}, staleBanner(), empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
+      state.drones.length ? [btn(t('Додати'), () => flightForm(), 'primary add')] : []));
+  }
+  return h('div', {}, staleBanner(),
+    h('div', { class: 'rows' }, list.map((f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
+      [fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' '), f.crash ? `${t('падіння')}${f.broke ? `: ${f.broke}` : ''}` : ''].filter(Boolean).join(' · '),
+      fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' }))));
+}
+
+/** Політ: батареї з хвилинами; кожна отримує цикл (cycles[].flightId), наліт дрона рахується з польотів. */
+function flightForm(f = null) {
+  const drones = state.drones.filter((d) => d.group !== 'ground').sort((a, b) => collate(a.name, b.name));
+  if (!drones.length) { toast(t('Спершу додайте дрон')); return; }
+  const lastDrone = recall('fpv-log:flight-drone');
+  const places = [...new Set([...state.flights].sort((a, b) => collate(b.date, a.date)).map((x) => x.place).filter(Boolean))].slice(0, 15);
+  let type = f?.type ?? 'freestyle';
+  let crash = f?.crash ? 'yes' : 'no';
+  const head = form([
+    { name: 'date', label: t('Дата'), type: 'dmy', value: f?.date ?? today(), required: true, half: true },
+    { name: 'place', label: t('Місце'), value: f?.place ?? places[0], list: 'places', half: true },
+    { name: 'droneId', label: t('Дрон'), type: 'select', options: drones.map((d) => [d.id, d.name]),
+      value: f?.droneId ?? (drones.some((d) => d.id === lastDrone) ? lastDrone : drones[0].id) },
+  ]);
+  const types = chips(FLIGHT_TYPES.map(([k, l]) => [k, t(l)]), type, (v) => { type = v; });
+  types.classList.add('segmented');
+  // Батареї: номер (або без номера — лише хвилини) і хвилини; нова — наступна ще не вибрана
+  const usable = [...state.batteries].filter((b) => b.state !== 'dead' || f?.bats.some((x) => x.batteryId === b.id)).sort((a, b) => collate(a.num, b.num));
+  const bats = h('div', { class: 'lines' });
+  const batForms = [];
+  const addBat = (x = {}) => {
+    const used = batForms.map((e) => e.f.values().batteryId);
+    const bf = form([
+      { name: 'batteryId', label: t('Батарея'), type: 'select', half: true, options: [['', t('Без номера')], ...usable.map((b) => [b.id, batTitle(b)])],
+        value: x.batteryId !== undefined ? x.batteryId ?? '' : usable.find((b) => !used.includes(b.id))?.id ?? '' },
+      { name: 'min', label: t('Хвилин'), type: 'number', value: x.min, half: true, required: true },
+    ]);
+    const entry = { f: bf };
+    const el = h('div', { class: 'line' }, bf.el, h('button', { type: 'button', class: 'link-btn', onclick: () => { batForms.splice(batForms.indexOf(entry), 1); el.remove(); } }, t('Прибрати')));
+    batForms.push(entry);
+    bats.append(el);
+  };
+  (f?.bats.length ? f.bats : [{}]).forEach(addBat);
+  // Падіння: що зламалось і, за бажанням, яку деталь зняти зламаною (звичне «Замінити»)
+  const crashForm = form([
+    { name: 'broke', label: t('Що зламалось'), value: f?.broke, placeholder: t('напр. пропелер, вал мотора') },
+    { name: 'slotId', label: t('Позначити деталь зламаною'), type: 'select', options: [] },
+  ]);
+  const fillSlots = () => {
+    const d = findDrone(head.inputs.droneId.value);
+    crashForm.inputs.slotId.replaceChildren(...selectOptions([['', t('— ні —')],
+      ...(d?.slots ?? []).filter((sl) => findItem(sl.itemId)).map((sl) => [sl.id, `${slotLabel(sl)}: ${itemName(findItem(sl.itemId))}`])], ''));
+  };
+  fillSlots();
+  head.inputs.droneId.addEventListener('change', fillSlots);
+  crashForm.el.hidden = crash !== 'yes';
+  const crashChips = chips([['no', t('Без падіння')], ['yes', t('Падіння')]], crash, (v) => { crash = v; crashForm.el.hidden = v !== 'yes'; });
+  crashChips.classList.add('segmented');
+  const note = form([{ name: 'note', label: t('Нотатка'), type: 'textarea', rows: 3, value: f?.note }]);
+  const close = sheet(f ? t('Політ') : t('Новий політ'), h('div', {},
+    head.el, h('datalist', { id: 'places' }, places.map((p) => h('option', { value: p }))),
+    h('div', { class: 'field-label' }, t('Тип')), types,
+    h('h3', {}, t('Батареї')), bats, h('div', { class: 'btn-row' }, btn(t('+ Батарея'), () => addBat())),
+    h('div', { class: 'field-label' }, t('Падіння')), crashChips, crashForm.el, note.el), {
+    tools: f ? [toolBtn('delete', t('Видалити'), () => confirmSheet(t('Видалити політ?'), t('Цикли батарей із цього польоту теж приберуться.'), t('Видалити'), async () => {
+      close();
+      await save(flightChanges(null, f));
+      toast(t('Видалено'));
+    }), 'danger')] : [],
+    actions: [btn(t('Скасувати'), () => close()), btn(t('Зберегти'), async () => {
+      if (invalidField(head) || batForms.some(({ f: bf }) => invalidField(bf))) return;
+      if (!batForms.length) { formError(t('Додайте хоча б одну батарею')); return; }
+      const bad = batForms.find(({ f: bf }) => !(bf.values().min > 0));
+      if (bad) { fieldError(bad.f.inputs.min, t('Більше нуля')); return; }
+      const v = head.values();
+      const c = crashForm.values();
+      const rec = {
+        ...(f ?? { id: db.uid(), created: Date.now() }), date: v.date, place: v.place, droneId: v.droneId, type,
+        bats: batForms.map(({ f: bf }) => { const x = bf.values(); return { batteryId: x.batteryId || null, min: x.min }; }),
+        crash: crash === 'yes', broke: crash === 'yes' ? c.broke : '', note: note.values().note,
+      };
+      remember('fpv-log:flight-drone', v.droneId);
+      close();
+      await save(flightChanges(rec, f), [rec.id]);
+      if (rec.crash && c.slotId) replaceSheet(rec.droneId, c.slotId, { outcome: 'broken', reason: [c.broke, t('падіння {date}', { date: fmt.date(rec.date) })].filter(Boolean).join(', ') });
+    }, 'primary')],
+  });
+}
+
+/**
+ * Зміни для бази: політ (next; null — видалити prev) і цикли його батарей. Цикли попередньої версії польоту
+ * прибираються, нові додаються — правка й видалення не лишають зайвих циклів. Новий сьогоднішній політ
+ * переводить батареї в «розряджена».
+ */
+function flightChanges(next, prev) {
+  const id = (next ?? prev).id;
+  const fresh = next && !prev && next.date === today();
+  const put = [];
+  for (const bid of new Set([...(prev?.bats ?? []), ...(next?.bats ?? [])].map((x) => x.batteryId).filter(Boolean))) {
+    const b = findBattery(bid);
+    if (!b) continue;
+    const cycles = (b.cycles ?? []).filter((c) => c.flightId !== id);
+    // Напруга й IR, уже вписані в цикл, переживають правку польоту
+    next?.bats.forEach((x, i) => { if (x.batteryId === bid) cycles.push({ ...b.cycles?.find((c) => c.id === `${id}-${i}`), id: `${id}-${i}`, date: next.date, flightId: id }); });
+    cycles.sort((a, c) => collate(a.date, c.date));
+    put.push({ ...b, cycles, ...(fresh && b.state !== 'dead' ? { state: 'empty', stateAt: Date.now() } : {}) });
+  }
+  return { flights: next ? { put: [next] } : { del: [id] }, batteries: { put } };
 }
 
 // ---------- налаштування: копія, імпорт, демо ----------
@@ -1313,7 +1437,7 @@ function backupRow() {
 
 function demoRow() {
   return setRow('demo', 'play', t('Демодані'), '', [
-    h('p', { class: 'muted small' }, t('Вигаданий 5″ самозбір на Walksnail з історією заміни мотора й прошивок, шолом Cobra X і батареї CNHL 6S 2200.')),
+    h('p', { class: 'muted small' }, t('Вигаданий 5″ самозбір на Walksnail з історією заміни мотора й прошивок, BNF Meteor75 із замовлення, шолом Cobra X, батареї й десять польотів.')),
     h('div', { class: 'btn-row' }, btn(t('Завантажити демодані'), loadDemo))]);
 }
 
@@ -1398,6 +1522,7 @@ function renderSettings() {
 
 const VIEWS = {
   drones: { title: 'Дрони', render: renderDrones, fab: () => droneForm() },
+  flights: { title: 'Польоти', render: renderFlights, fab: () => flightForm() },
   stock: { title: 'Склад', render: renderStock, fab: stockAddMenu },
   batteries: { title: 'Батареї', render: renderBatteries, fab: () => batteryForm() },
   settings: { title: 'Налаштування', render: renderSettings },
