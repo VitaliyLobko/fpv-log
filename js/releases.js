@@ -24,7 +24,18 @@ export function isNewer(latest, current) {
   return i >= 0 && a[i] > b[i];
 }
 
-const read = () => { try { return JSON.parse(localStorage.getItem(KEY)) ?? { at: 0, tags: {} }; } catch { return { at: 0, tags: {} }; } };
+// Розібраний кеш пам'ятаємо за самим рядком: latestTags кличеться на кожну деталь із прошивкою в кожному рендері
+let parsed = { raw: undefined, value: null };
+const read = () => {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch { /* приватний режим */ }
+  if (raw !== parsed.raw) {
+    let value = null;
+    try { value = JSON.parse(raw); } catch { /* битий кеш — як порожній */ }
+    parsed = { raw, value: value ?? { at: 0, tags: {} } };
+  }
+  return parsed.value;
+};
 
 /** Збережені теги: { 'betaflight/betaflight': '2026.6.2', … }. */
 export const latestTags = () => read().tags;

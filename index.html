@@ -27,9 +27,12 @@
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="night-red" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".5 .6 .1 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter><filter id="phosphor" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".075 .148 .028 0 0  .3 .59 .11 0 0  .12 .236 .044 0 0  0 0 0 1 0"/></filter><filter id="amber" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".4 .78 .15 0 0  .27 .53 .1 0 0  .06 .11 .02 0 0  0 0 0 1 0"/></filter><filter id="white" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".3 .58 .11 0 0  .32 .63 .12 0 0  .35 .68 .13 0 0  0 0 0 1 0"/></filter></svg>
   <header class="topbar">
     <div class="topbar-row">
-      <div class="topbar-brand"><h1 id="title">FPV Log</h1></div>
+      <div class="topbar-brand"><a href="#drones" id="back-btn" class="gear back-btn" hidden aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a><h1 id="title">FPV Log</h1></div>
       <div class="topbar-actions">
         <button type="button" id="sync-chip" class="sync-chip" hidden></button>
+        <a href="#settings" id="settings-btn" class="gear" aria-label="Налаштування">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/><path d="M19 12h2.6M16.95 16.95l1.84 1.84M12 19v2.6M7.05 16.95l-1.84 1.84M5 12H2.4M7.05 7.05L5.21 5.21M12 5V2.4M16.95 7.05l1.84-1.84"/></svg>
+        </a>
       </div>
     </div>
     <div id="subtitle" class="muted"></div>
@@ -60,10 +63,6 @@
     <a href="#batteries" data-tab="batteries">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10.5v3M7 10v4M10.5 10v4"/></svg>
       <span>Батареї</span>
-    </a>
-    <a href="#settings" data-tab="settings">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6"/><path d="M19 12h2.6M16.95 16.95l1.84 1.84M12 19v2.6M7.05 16.95l-1.84 1.84M5 12H2.4M7.05 7.05L5.21 5.21M12 5V2.4M16.95 7.05l1.84-1.84"/></svg>
-      <span>Налаштування</span>
     </a>
   </nav>
 

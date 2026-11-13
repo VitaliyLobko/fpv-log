@@ -8,7 +8,7 @@ import { rateOn, refreshRates } from './usd.js';
 import { parseConfig } from './fcconfig.js';
 import { searchPlace, hourly, kpIndex, verdict, LIMITS } from './weather.js';
 import { repoOf, isNewer, latestTags, refreshLatest } from './releases.js';
-import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, icon, goTab, confirmed, fieldError, formError, swipeStep } from './ui.js';
+import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, icon, goTab, confirmed, fieldError, formError, swipeStep, pickStrip } from './ui.js';
 
 let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
 let tab = 'drones';
@@ -67,6 +67,8 @@ const SLOTS = {
 
 const STATUS = { stock: 'На складі', installed: 'На дроні', broken: 'Зламаний', sold: 'Продано / списано' };
 const BAT_STATES = [['charged', 'Заряджена'], ['storage', 'Зберігання'], ['empty', 'Розряджена'], ['dead', 'Здута / списана']];
+// Тон мітки стану: зберігання — спокійно-зелений (так і має лежати), заряджена — акцент (готова), розряджена — сіра, здута — червона
+const BAT_TONE = { charged: 'info', storage: 'ok', empty: 'idle', dead: 'bad' };
 const batStateLabel = (k) => t(BAT_STATES.find(([x]) => x === k)?.[1] ?? '');
 const CONNECTORS = ['XT60', 'XT30', 'BT2.0', 'PH2.0', 'A30', 'XT90'];
 const FLIGHT_TYPES = [['freestyle', 'Фрістайл'], ['long', 'Дальній'], ['other', 'Інше']];
@@ -116,11 +118,30 @@ function box(title, content, tools = null) {
 /**
  * Група, що згортається; стан пам'ятає між запусками. open — як показати вперше, cls — 'group' для груп списку на екрані.
  * Заголовок — з лічильником чи головним значенням: і згорнута група розповідає, що в ній.
+ * body-функція — рядки будуються, лише коли групу розгорнуть: сотні рядків згорнутих «На дроні», «Продано» чи старих місяців
+ * інакше роздувають DOM, і кожна шторка над списком довго перераховує стилі. ids — що всередині, поки не збудовано
+ * (data-has: confirmed() підсвітить заголовок групи).
  */
-function fold(key, title, body, { open = false, cls = '' } = {}) {
+function fold(key, title, body, { open = false, cls = '', ids = null } = {}) {
   const v = recall(`fpv-log:open:${key}`);
-  const el = h('details', { class: `ex-more ${cls}`, open: v === null ? open : v === '1' }, h('summary', {}, title), body);
-  el.addEventListener('toggle', () => remember(`fpv-log:open:${key}`, el.open ? '1' : '0'));
+  const isOpen = v === null ? open : v === '1';
+  const lazy = typeof body === 'function';
+  let built = !lazy || isOpen;
+  const summary = h('summary', {}, title);
+  const el = h('details', { class: `ex-more ${cls}`, open: isOpen, dataset: built || !ids ? undefined : { has: ids.join(' ') } },
+    summary, lazy ? (isOpen ? body() : null) : body);
+  // Будуємо до розгортання (клік по заголовку йде раніше), щоб не блимнула порожня група
+  const build = () => {
+    if (built) return;
+    built = true;
+    el.append(body());
+    delete el.dataset.has;
+  };
+  summary.addEventListener('click', build);
+  el.addEventListener('toggle', () => {
+    if (el.open) build();
+    remember(`fpv-log:open:${key}`, el.open ? '1' : '0');
+  });
   return el;
 }
 
@@ -152,6 +173,33 @@ function row(title, sub, right, onclick, { id = null, cls = '', thumb = null } =
     right !== null && right !== undefined && right !== '' ? h('span', { class: 'row-qty' }, right) : null);
 }
 
+/** Мітка стану: крапка й слово (колір — не єдина ознака). tone: ok | warn | bad | info | idle. */
+const pill = (text, tone = 'idle') => h('span', { class: `pill ${tone}` }, text);
+
+/** Заголовок групи списку: назва ліворуч, лічильник чи підсумок праворуч — і згорнута група розповідає, що в ній. */
+const groupHead = (title, meta) => [h('span', { class: 'grp-name' }, title), h('span', { class: 'grp-meta' }, String(meta))];
+
+/** Плитка зі значком на місці фото (замовлення). */
+const iconTile = (name) => h('span', { class: 'thumb cat-thumb', 'aria-hidden': 'true' }, icon(name));
+
+/** Плитка батареї: корпус із рівнем за станом (заряджена — повна, зберігання — половина, розряджена — на дні) і S під ним. */
+function batTile(b) {
+  return h('span', { class: 'thumb bat-tile', dataset: { state: b.state || 'storage' }, 'aria-hidden': 'true' },
+    h('i', { class: 'bat-glyph' }), h('b', {}, b.s ? `${b.s}S` : '—'));
+}
+
+/**
+ * Показники картки, як OSD у шоломі: число крупно, підпис з одиницею під ним, кутики рамки акцентом.
+ * pairs: [[значення, підпис]]; порожні пропускаються.
+ */
+function readouts(pairs) {
+  const list = pairs.filter((p) => p && p[0] !== null && p[0] !== undefined && p[0] !== '');
+  return list.length ? h('div', { class: 'readouts' }, list.map(([v, label]) => h('div', { class: 'readout' }, h('b', {}, v), h('small', {}, label)))) : null;
+}
+
+/** Хвилини як таймер польоту в OSD: 82 → «1:22». */
+const fmtClock = (m) => { const n = Math.round(num(m)); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
+
 function kv(pairs) {
   return h('dl', { class: 'kv' }, pairs.filter((p) => p && p[1] !== null && p[1] !== undefined && p[1] !== '')
     .map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
@@ -168,11 +216,19 @@ const logged = (rec, text, date = today()) => ({ ...rec, history: [...(rec.histo
 
 // ---------- дані ----------
 
-const findDrone = (id) => state.drones.find((x) => x.id === id);
-const findItem = (id) => (id ? state.items.find((x) => x.id === id) : null);
-const findOrder = (id) => state.orders.find((x) => x.id === id);
-const findBattery = (id) => state.batteries.find((x) => x.id === id);
-const findPhoto = (id) => (id ? state.photos.find((x) => x.id === id) : null);
+// Пошук за id — через Map на кожне сховище: лінійний find у кожному слоті й рядку на сотнях деталей помітно гальмує список.
+// state.* лише замінюються цілими масивами (load), тож Map, прив'язана до масиву, не застаріває
+const byId = new WeakMap();
+const index = (list) => {
+  let m = byId.get(list);
+  if (!m) { m = new Map(list.map((x) => [x.id, x])); byId.set(list, m); }
+  return m;
+};
+const findDrone = (id) => index(state.drones).get(id);
+const findItem = (id) => (id ? index(state.items).get(id) : null);
+const findOrder = (id) => index(state.orders).get(id);
+const findBattery = (id) => index(state.batteries).get(id);
+const findPhoto = (id) => (id ? index(state.photos).get(id) : null);
 
 /** Прочитати базу; дані старого вигляду (з іншого пристрою, Диска чи копії) спершу оновити. */
 async function load() {
@@ -330,6 +386,13 @@ function dropPhotos(ids) {
   list.forEach((p) => sync.trashPhoto(p.driveId));
   return list.length ? { photos: { del: list.map((p) => p.id) }, blobs: { del: list.map((p) => p.id) } } : {};
 }
+
+/** Плитка стрічки вибору: фото (тап вибирає, а не відкриває на весь екран), інакше fallback — монограма чи значок. */
+const pickTile = (photoId, fallback) => {
+  const p = findPhoto(photoId);
+  return h('span', { class: 'bg-sw pick-sw', 'aria-hidden': 'true' }, p ? h('img', { class: 'thumb', src: p.thumb, alt: '' }) : fallback);
+};
+const monoTile = (name) => { const m = monogram(name); return h('span', { class: 'thumb mono', style: `--h: ${hue(m)}` }, m); };
 
 /** Велике фото в картці: кнопка — відкривається й з клавіатури. */
 const photoBtn = (src, onclick) => h('button', { type: 'button', class: 'photo-btn', 'aria-label': t('Відкрити фото'), onclick }, h('img', { class: 'drone-photo', src, alt: '' }));
@@ -643,9 +706,12 @@ function droneBody(d) {
   const sorted = (list) => [...list].sort((a, c) => collate(c.date, a.date));
   return h('div', {},
     photo ? photoBtn(photo.thumb, () => showPhoto(photo.id, dronePhotos(d))) : null,
-    h('p', { class: 'card-sum' }, [kindLabel(d.kind), droneCost(d) ? fmt.money(droneCost(d)) : planned(d) ? t('у планах') : t('ціна не вказана'),
-      flown.length ? `${fmtMin(flown.reduce((n, f) => n + flightMin(f), 0))} · ${t('польотів: {n}', { n: flown.length })}` : null].filter(Boolean).join(' · ')),
-    b || d.buyDate ? h('p', { class: 'muted small card-sub' }, t('Куплено: {what}', { what: b ? `${b.o.shop} · ${fmt.date(b.o.date)}` : fmt.date(d.buyDate) })) : null,
+    readouts([
+      [droneCost(d) ? fmt.num(Math.round(droneCost(d))) : null, t('вартість, грн')],
+      flown.length ? [fmtClock(flown.reduce((n, f) => n + flightMin(f), 0)), t('наліт, год:хв')] : null,
+      flown.length ? [String(flown.length), t('польотів')] : null]),
+    h('p', { class: 'muted small card-sub' }, [kindLabel(d.kind), droneCost(d) ? null : planned(d) ? t('у планах') : t('ціна не вказана'),
+      b || d.buyDate ? t('куплено {what}', { what: b ? `${b.o.shop}, ${fmt.date(b.o.date)}` : fmt.date(d.buyDate) }) : null].filter(Boolean).join(' · ')),
     fresh.length ? h('p', { class: 'fw-new small card-sub' }, t('Вийшли нові версії прошивок: {list} — оновлювати не обов’язково', { list: fresh.map((it) => `${itemName(it)} → ${fwNewer(it)}`).join('; ') })) : null,
     h('div', { class: 'btn-row card-acts' },
       btn(t('Нотатка'), () => noteForm(d)),
@@ -696,6 +762,21 @@ function copyText(text) {
 
 /** «Замінити»: нова деталь зі складу (або порожньо); зняту — на склад чи «зламана» з причиною. Історія — у дрона й обох деталей. */
 /** preset — { outcome: 'broken', reason } з польоту з падінням: знята деталь одразу «зламана» з причиною. */
+/** Аркуш вибору деталі з пошуком за назвою й категорією; list — у потрібному порядку. */
+function itemPickSheet(title, list, onPick) {
+  const search = h('input', { type: 'search', placeholder: t('Пошук'), autocomplete: 'off', 'aria-label': t('Пошук') });
+  const rows = h('div', { class: 'rows' });
+  const hay = new Map(list.map((it) => [it, `${itemName(it)} ${catLabel(it.cat)}`.toLowerCase()]));
+  const paint = () => {
+    const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+    rows.replaceChildren(...list.filter((it) => words.every((w) => hay.get(it).includes(w))).map((it) =>
+      row(itemName(it), catLabel(it.cat), it.price ? fmt.uah(it.price) : '', () => { close(); onPick(it); }, { thumb: pickTile(it.photoId, catThumb(it.cat)).firstChild })));
+  };
+  search.addEventListener('input', paint);
+  paint();
+  const close = sheet(title, h('div', {}, h('label', { class: 'field' }, search), rows));
+}
+
 function replaceSheet(droneId, slotId, preset = {}) {
   const d = findDrone(droneId);
   const s = d.slots.find((x) => x.id === slotId);
@@ -710,12 +791,42 @@ function replaceSheet(droneId, slotId, preset = {}) {
   reason.el.hidden = outcome !== 'broken';
   const out = chips([['stock', t('На склад')], ['broken', t('Зламана')]], outcome, (v) => { outcome = v; reason.el.hidden = v !== 'broken'; });
   out.classList.add('segmented');
+  // Є підходящі деталі — стрічкою з фото чи значком категорії; решта складу — «Інше на складі…» з пошуком.
+  // Приховане поле лишається джерелом значення. Підходящих немає — звичний список із групами
+  const others = free.filter((it) => it.cat !== s.cat);
+  let picker = h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('Нова деталь')), select);
+  let othersBtn = null;
+  if (fits.length) {
+    const note = h('p', { class: 'muted small pick-note' });
+    const say = (v) => {
+      const it = findItem(v);
+      note.textContent = it ? [catLabel(it.cat), it.fw, it.price ? fmt.money(it.price) : null].filter(Boolean).join(' · ')
+        : cur ? t('Поточну деталь буде знято, слот лишиться порожнім') : t('Слот лишиться порожнім');
+    };
+    const label = h('span', { class: 'field-label' }, t('Нова деталь'));
+    select.hidden = true;
+    picker = h('div', { class: 'field' });
+    const paint = () => {
+      const v = select.value;
+      const shown = [...fits];
+      const extra = findItem(v);
+      if (extra && !shown.includes(extra)) shown.unshift(extra);
+      const strip = pickStrip([['', t('Порожньо'), h('span', { class: 'bg-sw pick-sw pick-none', 'aria-hidden': 'true' }, '—')],
+        ...shown.map((it) => [it.id, itemName(it), pickTile(it.photoId, catThumb(it.cat))])],
+      v, (x) => { select.value = x; say(x); }, { label: t('Нова деталь'), cls: 'pick-wheel' });
+      say(v);
+      picker.replaceChildren(label, select, strip, note);
+    };
+    paint();
+    // Поруч із «+ Нова деталь» — один ряд дій під стрічкою
+    if (others.length) othersBtn = btn(t('Інше на складі ({n})…', { n: others.length }), () => itemPickSheet(t('Інше на складі'), others, (it) => { select.value = it.id; paint(); }), 'quiet');
+  }
   const close = sheet(`${t('Замінити')}: ${slotLabel(s)}`, h('div', {},
     cur ? kv([[t('Зараз'), itemName(cur)]]) : null,
-    h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('Нова деталь')), select),
+    picker,
     fits.length ? null : h('p', { class: 'muted small' }, cur ? t('На складі немає вільних деталей «{cat}»: додайте нову або лиште «— порожньо —», щоб просто зняти поточну.', { cat: catLabel(s.cat) })
       : t('На складі немає вільних деталей «{cat}» — додайте нову кнопкою нижче.', { cat: catLabel(s.cat) })),
-    h('div', { class: 'btn-row' }, btn(t('+ Нова деталь'), () => {
+    h('div', { class: 'btn-row' }, othersBtn, btn(t('+ Нова деталь'), () => {
       close();
       itemForm(null, { preset: { cat: s.cat }, onSaved: (it) => replaceSlot(droneId, slotId, it.id, 'stock', '') });
     }, 'quiet')),
@@ -896,12 +1007,14 @@ function renderStock() {
   const seg = chips(STOCK_SEGS.map(([k, l]) => [k, t(l)]), stockSeg, (v) => { stockSeg = v; remember('fpv-log:stock-seg', v); render(); });
   seg.classList.add('segmented', 'seg-fit');
   segIcons(seg, { units: 'chip', cons: 'prop', orders: 'receipt', wish: 'heart' });
-  const byName = (a, b) => collate(catLabel(a.cat), catLabel(b.cat)) || collate(itemName(a), itemName(b));
+  // За категорією, потім назвою; ключі — раз на запис, а не в кожному порівнянні
+  const byName = (list) => list.map((it) => [catLabel(it.cat), itemName(it), it]).sort((a, b) => collate(a[0], b[0]) || collate(a[1], b[1])).map((x) => x[2]);
   let body;
   if (stockSeg === 'orders') {
     const list = [...state.orders].sort((a, b) => collate(b.date, a.date));
     body = list.length ? h('div', { class: 'rows' }, list.map((o) =>
-      row(o.shop || t('Замовлення'), `${fmt.date(o.date)} · ${t('позицій: {n}', { n: o.lines.length })}`, fmt.uah(orderTotal(o)), () => orderForm(o), { id: o.id })))
+      row(o.shop || t('Замовлення'), `${fmt.date(o.date)} · ${t('позицій: {n}', { n: o.lines.length })}`,
+        fmt.uah(orderTotal(o)), () => orderForm(o), { id: o.id, thumb: iconTile('receipt') })))
       : empty(t('Замовлень немає'), t('Покупка — це замовлення: магазин, дата, позиції й доставка. Позиції одразу лягають на склад.'));
   } else if (stockSeg === 'wish') {
     const all = state.wishes;
@@ -916,14 +1029,14 @@ function renderStock() {
       : empty(t('Список «Хочу купити» порожній'), t('Що придивилися: назва, посилання, орієнтовна ціна й для якого дрона. Одним дотиком — у чернетку замовлення.'),
         [btn(t('Додати'), () => wishForm(), 'primary add')]);
   } else if (stockSeg === 'cons') {
-    const list = state.items.filter((it) => it.kind === 'consumable').sort(byName);
+    const list = byName(state.items.filter((it) => it.kind === 'consumable'));
     body = list.length ? h('div', { class: 'rows' }, list.map(itemRow))
       : empty(t('Розхідників немає'), t('Пропелери, ремінці, гвинти — кількістю, з порогом «мало».'));
   } else {
-    const units = state.items.filter((it) => it.kind !== 'consumable').sort(byName);
+    const units = byName(state.items.filter((it) => it.kind !== 'consumable'));
     // Групи за станом згортаються; «На дроні» (коли довга) й «Продано» — згорнуті, поки їх не відкрили: головне — що лежить на складі
     // «На дроні» — окрема група на кожен дрон з його назвою: одна купа «На дроні · 18» не каже, де що стоїть
-    const group = (key, title, list, open) => fold(key, `${title} · ${list.length}`, h('div', { class: 'rows' }, list.map(itemRow)), { cls: 'group', open });
+    const group = (key, title, list, open) => fold(key, groupHead(title, list.length), () => h('div', { class: 'rows' }, list.map(itemRow)), { cls: 'group', open, ids: list.map((it) => it.id) });
     body = units.length ? h('div', {}, Object.keys(STATUS).flatMap((st) => {
       const list = units.filter((it) => (it.status ?? 'stock') === st);
       if (!list.length) return [];
@@ -1322,8 +1435,13 @@ function renderBatteries() {
   const list = [...state.batteries].sort((a, b) => collate(a.num, b.num));
   const live = list.filter((b) => b.state !== 'dead');
   const dead = list.filter((b) => b.state === 'dead');
-  const batRow = (b) => row(batTitle(b), [b.connector, batStateLabel(b.state), t('циклів: {n}', { n: b.cycles?.length ?? 0 })].filter(Boolean).join(' · '),
-    '', () => batteryDetail(b.id), { id: b.id, cls: staleBatteries().includes(b) ? 'low' : '' });
+  // Батарея: плитка-індикатор (рівень за станом і S), назва — номер і бренд, параметри й мітка стану — під нею, цикли — праворуч
+  const stale = staleBatteries();
+  const batRow = (b) => row([`#${b.num}`, b.brand].filter(Boolean).join(' · '),
+    [[b.mah && `${b.mah} ${t('мАг')}`, b.c && `${b.c}C`, b.connector].filter(Boolean).join(' · '),
+      pill(batStateLabel(b.state), stale.includes(b) ? 'warn' : BAT_TONE[b.state])],
+    t('{n} цикл.', { n: b.cycles?.length ?? 0 }), () => batteryDetail(b.id),
+    { id: b.id, cls: stale.includes(b) ? 'low' : '', thumb: batTile(b) });
   if (!list.length) return h('div', {}, empty(t('Батарей ще немає'), t('Кожна банка — окремий запис з номером. Додайте кнопкою «+».'), [btn(t('Додати'), () => batteryForm(), 'primary add')]));
   return h('div', {}, staleBanner(),
     h('div', { class: 'rows' }, live.map(batRow)),
@@ -1416,8 +1534,11 @@ function batteryBody(b) {
   states.classList.add('segmented', 'bat-states');
   const days = Math.floor((Date.now() - (b.stateAt ?? Date.now())) / 864e5);
   return h('div', {},
-    h('p', { class: 'card-sum' }, [t('циклів: {n}', { n: b.cycles?.length ?? 0 }), t('у цьому стані {n} дн.', { n: days })].join(' · ')),
-    h('p', { class: 'muted small card-sub' }, [b.connector, b.price ? fmt.money(b.price) : null, b.buyDate ? t('куплено {date}', { date: fmt.date(b.buyDate) }) : null].filter(Boolean).join(' · ')),
+    readouts([
+      [String(b.cycles?.length ?? 0), t('циклів')],
+      [String(days), t('днів у стані')],
+      [b.price ? fmt.num(Math.round(b.price)) : null, t('ціна, грн')]]),
+    h('p', { class: 'muted small card-sub' }, [b.connector, b.buyDate ? t('куплено {date}', { date: fmt.date(b.buyDate) }) : null].filter(Boolean).join(' · ')),
     states,
     h('p', { class: 'muted small' }, t('Цикл — один заряд. Політ у журналі додає цикл сам, а сьогоднішній ще й ставить «Розряджена»; «+ цикл» — для зарядів поза журналом. «Заряджена» понад {n} дн. — нагадаю про зберігання.', { n: staleDays() })),
     h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary')),
@@ -1504,19 +1625,28 @@ function renderFlights() {
     return h('div', {}, seg, empty(t('Польотів ще немає'), t('Політ: дата, місце, дрон і батареї з хвилинами. Кожна батарея отримає цикл, дрон — наліт.'),
       state.drones.length ? [btn(t('Додати'), () => flightForm(), 'primary add')] : []));
   }
-  const flightRow = (f) => row([findDrone(f.droneId)?.name ?? '—', f.place].filter(Boolean).join(' · '),
-    [fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' '), f.crash ? `${t('падіння')}${f.broke ? `: ${f.broke}` : ''}` : ''].filter(Boolean).join(' · '),
-    fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, cls: f.crash ? 'low' : '' });
+  // Рядок польоту: плитка дрона (фото чи монограма) — журнал читається за дронами, як і список «Дрони»; падіння — міткою
+  const flightRow = (f) => {
+    const d = findDrone(f.droneId);
+    return row([d?.name ?? '—', f.place].filter(Boolean).join(' · '),
+      [[fmt.date(f.date), flightTypeLabel(f.type), f.bats.map((x) => batLabel(x.batteryId)).join(' ')].filter(Boolean).join(' · '),
+        f.crash ? pill(f.broke ? `${t('падіння')}: ${f.broke}` : t('падіння'), 'bad') : null],
+      fmtMin(flightMin(f)), () => flightForm(f), { id: f.id, thumb: thumbImg(d?.photoId, monogram(d?.name ?? '—')) });
+  };
   // Журнал — місяцями: останній розгорнутий, решта згорнуті з кількістю й нальотом
   const shown = byDroneFilter(list);
   const months = [...new Set(shown.map((f) => f.date.slice(0, 7)))];
-  const monthName = (ym) => { const m = new Date(`${ym}-01T00:00:00`).toLocaleDateString(locale(), { month: 'long', year: 'numeric' }); return m[0].toUpperCase() + m.slice(1); };
+  const monthName = (ym) => { const m = MONTH_LONG.format(new Date(`${ym}-01T00:00:00`)); return m[0].toUpperCase() + m.slice(1); };
   return h('div', {}, seg, flightSeg === 'stats' ? renderStats() : h('div', {}, droneFilterChips(list), months.map((ym, i) => {
     const fl = shown.filter((f) => f.date.startsWith(ym));
-    return fold(`flights-${ym}`, `${monthName(ym)} · ${t('польотів: {n}', { n: fl.length })} · ${fmtMin(fl.reduce((n, f) => n + flightMin(f), 0))}`,
-      h('div', { class: 'rows' }, fl.map(flightRow)), { cls: 'group', open: i === 0 });
+    return fold(`flights-${ym}`, groupHead(monthName(ym), `${t('польотів: {n}', { n: fl.length })} · ${fmtMin(fl.reduce((n, f) => n + flightMin(f), 0))}`),
+      () => h('div', { class: 'rows' }, fl.map(flightRow)), { cls: 'group', open: i === 0, ids: fl.map((f) => f.id) });
   })));
 }
+
+// toLocaleDateString з опціями щоразу будує новий форматер — на два роки польотів це помітно; форматер один на застосунок
+const MONTH_LONG = new Intl.DateTimeFormat(locale(), { month: 'long', year: 'numeric' });
+const MONTH_SHORT = new Intl.DateTimeFormat(locale(), { month: 'short', year: '2-digit' });
 
 /** Горизонтальні смуги: [[підпис, значення]], довжина — частка найбільшого. */
 function bars(list, format) {
@@ -1542,7 +1672,7 @@ function renderStats() {
   const months = [];
   const keys = [...byMonth.keys()].sort();
   for (let ym = keys.at(-1); ym >= keys[0] && months.length < 12;) {
-    months.unshift([new Date(`${ym}-01T00:00:00`).toLocaleDateString(locale(), { month: 'short', year: '2-digit' }), byMonth.get(ym) ?? 0]);
+    months.unshift([MONTH_SHORT.format(new Date(`${ym}-01T00:00:00`)), byMonth.get(ym) ?? 0]);
     const [y, mo] = ym.split('-').map(Number);
     ym = mo > 1 ? `${y}-${String(mo - 1).padStart(2, '0')}` : `${y - 1}-12`;
   }
@@ -1741,12 +1871,21 @@ function flightForm(f = null) {
   };
   fillSlots();
   head.inputs.droneId.addEventListener('change', fillSlots);
+  // Дрон — стрічкою з фото чи монограмою, коли є з чого вибирати; приховане поле лишається джерелом значення
+  let dronePick = null;
+  if (drones.length > 1) {
+    const sel = head.inputs.droneId;
+    sel.closest('.field').hidden = true;
+    dronePick = h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('Дрон')),
+      pickStrip(drones.map((d) => [d.id, d.name, pickTile(d.photoId, monoTile(d.name))]), sel.value,
+        (v) => { sel.value = v; sel.dispatchEvent(new Event('change')); }, { label: t('Дрон'), cls: 'pick-wheel' }));
+  }
   crashForm.el.hidden = crash !== 'yes';
   const crashChips = chips([['no', t('Без падіння')], ['yes', t('Падіння')]], crash, (v) => { crash = v; crashForm.el.hidden = v !== 'yes'; });
   crashChips.classList.add('segmented');
   const note = form([{ name: 'note', label: t('Нотатка'), type: 'textarea', rows: 3, value: f?.note }]);
   const close = sheet(f ? t('Політ') : t('Новий політ'), h('div', {},
-    head.el, h('datalist', { id: 'places' }, places.map((p) => h('option', { value: p }))),
+    head.el, dronePick, h('datalist', { id: 'places' }, places.map((p) => h('option', { value: p }))),
     h('div', { class: 'field-label' }, t('Тип')), types,
     h('h3', {}, t('Батареї')), f ? null : h('p', { class: 'muted small' }, t('Кожна батарея отримає цикл, дрон — наліт; політ за сьогодні переведе батареї в «Розряджена».')),
     bats, h('div', { class: 'btn-row' }, btn(t('+ Батарея'), () => addBat())),
@@ -1977,8 +2116,13 @@ function renderSyncChip(s) {
     chip.className = `sync-chip ${s.state}`;
     chip.title = s.message || label;
   }
-  // Поки людина щось вписує в ⚙ (Марнотрат, дні), статус синхронізації не перебудовує екран — введене не зникне
-  if (tab === 'settings' && !document.activeElement?.matches('#view input, #view textarea, #view select')) render();
+  // Поки людина щось вписує в ⚙ (Марнотрат, дні), статус синхронізації не перебудовує екран — введене не зникне.
+  // Інакше міняється лише рядок «Google Диск»: повна перебудова зривала б гортання стрічки теми чи фону.
+  // Диск підключили чи вимкнули — від цього залежать тексти інших рядків, тоді весь екран
+  if (tab === 'settings' && !document.activeElement?.matches('#view input, #view textarea, #view select')) {
+    const old = $('view').querySelector('.set-row[data-key="sync"]');
+    if (old && syncShown === syncMode()) old.replaceWith(syncRow()); else render();
+  }
 }
 
 function onSyncChip() {
@@ -1995,7 +2139,6 @@ function onSyncChip() {
 
 // Тема: auto — як у системі. Першу розстановку до малювання робить скрипт в index.html.
 const THEMES = [['auto', 'Авто'], ['dark', 'Темна'], ['light', 'Світла'], ['lime', 'Лайм'], ['night', 'Нічна'], ['phosphor', 'Фосфор'], ['amber', 'Бурштин'], ['white', 'Білий фосфор']];
-const SPECIAL_THEMES = ['night', 'phosphor', 'amber', 'white'];
 const lightScheme = matchMedia('(prefers-color-scheme: light)');
 
 function themePref() {
@@ -2099,7 +2242,7 @@ function settingsGroup(title, items) {
 /** Рядок налаштувань: іконка, назва й поточне значення; тап розгортає керування. Відкритий — один. */
 function setRow(key, ico, title, value, body, { tone = '', danger = false } = {}) {
   const open = recall(SET_OPEN_KEY) === key;
-  const el = h('div', { class: `set-row${open ? ' open' : ''}${danger ? ' danger' : ''}` });
+  const el = h('div', { class: `set-row${open ? ' open' : ''}${danger ? ' danger' : ''}`, dataset: { key } });
   const head = h('button', {
     type: 'button', class: 'set-head', 'aria-expanded': String(open), onclick: () => {
       const opening = !el.classList.contains('open');
@@ -2125,7 +2268,12 @@ function shortWhen(ms) {
     : fmt.date(new Date(ms - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10));
 }
 
+// Режим Диска, з яким намальовано ⚙: змінився — перемальовуємо весь екран, а не лише рядок «Google Диск»
+const syncMode = () => `${sync.configured()}|${sync.enabled()}`;
+let syncShown = '';
+
 function syncRow() {
+  syncShown = syncMode();
   const s = sync.status;
   const on = sync.configured() && sync.enabled();
   const bad = on && (s.state === 'auth' || s.state === 'error');
@@ -2216,29 +2364,45 @@ function wipeRow() {
     { danger: true });
 }
 
-function themeRow() {
-  const themeChips = (special) => {
-    const c = chips(THEMES.filter(([k]) => SPECIAL_THEMES.includes(k) === special).map(([k, label]) => [k, t(label)]), themePref(),
-      (v) => { remember('fpv-log:theme', v); applyTheme(); render(); });
-    c.classList.add('segmented');
-    return c;
-  };
-  return setRow('theme', 'palette', t('Тема'), t(THEMES.find(([k]) => k === themePref())[1]), [
-    themeChips(false),
-    h('div', { class: 'field-label theme-group' }, t('Спецрежими')), themeChips(true),
-    themePref() === 'night' ? h('label', { class: 'field night-level' }, h('span', {}, t('Яскравість червоного')),
-      h('input', { type: 'range', min: '20', max: '100', step: '5', value: String(nightLevel()),
-        oninput: (e) => { remember('fpv-log:night-level', e.target.value); applyTheme(); } })) : null]);
+/** Плитка-зразок теми: фон, кнопка акцентом і дві картки; спецрежими — тим самим фільтром, що й уся сторінка. */
+function themeSwatch(k) {
+  return h('span', { class: 'bg-sw theme-sw', dataset: { th: k }, 'aria-hidden': 'true' }, h('i'), h('i'), h('i'));
 }
 
+/** Тема — стрічкою плиток-зразків; застосовується, коли стрічка зупинилась, без перемальовування сторінки. */
+function themeRow() {
+  const night = h('label', { class: 'field night-level', hidden: themePref() !== 'night' }, h('span', {}, t('Яскравість червоного')),
+    h('input', { type: 'range', min: '20', max: '100', step: '5', value: String(nightLevel()),
+      oninput: (e) => { remember('fpv-log:night-level', e.target.value); applyTheme(); } }));
+  const strip = pickStrip(THEMES.map(([k, label]) => [k, t(label), themeSwatch(k)]), themePref(), (v) => {
+    remember('fpv-log:theme', v);
+    applyTheme();
+    row.querySelector('.set-val').textContent = t(THEMES.find(([k]) => k === v)[1]);
+    night.hidden = v !== 'night';
+    // Набір фонів залежить від теми (у спецрежимах його немає) — рядок «Фон» міняємо на місці
+    const old = document.querySelector('.set-row[data-key="backdrop"]');
+    const next = backdropRow();
+    if (old && next) old.replaceWith(next);
+    else if (old) old.remove();
+    else if (next) row.after(next);
+  }, { label: t('Тема'), live: false });
+  const row = setRow('theme', 'palette', t('Тема'), t(THEMES.find(([k]) => k === themePref())[1]), [strip, night]);
+  return row;
+}
+
+/** Фон під картками — плитки з самим фоном; гортаєш — фон міняється наживо. Набір — для поточної теми, у спецрежимах немає. */
 function backdropRow() {
   const fam = bgFamily(document.documentElement.dataset.theme);
   const list = BACKDROPS[fam];
   if (!list) return null;
-  const now = backdropPref(fam);
-  const c = chips(list.map(([k, label]) => [k, t(label)]), now, (v) => { remember(BG_KEY[fam], v); applyTheme(); render(); });
-  c.classList.add('segmented');
-  return setRow('backdrop', 'gallery', t('Фон'), t(list.find(([k]) => k === now)[1]), [c]);
+  const label = (k) => t(list.find(([x]) => x === k)[1]);
+  const strip = pickStrip(list.map(([k, name]) => [k, t(name), h('span', { class: 'bg-sw', dataset: { bg: k }, 'aria-hidden': 'true' })]), backdropPref(fam), (v) => {
+    remember(BG_KEY[fam], v);
+    applyTheme();
+    row.querySelector('.set-val').textContent = label(v);
+  }, { label: t('Фон') });
+  const row = setRow('backdrop', 'gallery', t('Фон'), label(backdropPref(fam)), [strip]);
+  return row;
 }
 
 function staleRow() {
@@ -2456,7 +2620,23 @@ function render() {
     if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
   document.querySelector('.tabs a[data-tab="batteries"]').classList.toggle('alert', staleBatteries().length > 0);
+  // ⚙ — шестерня в шапці, не вкладка: у налаштуваннях вона підсвічена, а ліворуч — «Назад» туди, звідки прийшли
+  const gear = $('settings-btn');
+  gear.classList.toggle('active', tab === 'settings');
+  if (tab === 'settings') gear.setAttribute('aria-current', 'page'); else gear.removeAttribute('aria-current');
+  $('back-btn').hidden = tab !== 'settings';
+  $('back-btn').href = `#${backTab}`;
+  if (tab === 'settings' && shownTab !== 'settings') {
+    gear.classList.remove('play');
+    void gear.offsetWidth;   // перезапуск анімації
+    gear.classList.add('play');
+  }
+  shownTab = tab;
 }
+
+// Звідки прийшли в ⚙ — туди веде «Назад»; яка вкладка намальована востаннє — шестерня крутиться лише на вході
+let backTab = 'drones';
+let shownTab = null;
 
 function route() {
   // QR з наклейки: #bat=<id> — картка батареї й одразу «+ цикл»; адреса стає звичайною вкладкою
@@ -2470,7 +2650,9 @@ function route() {
     return;
   }
   const next = location.hash.slice(1);
-  tab = VIEWS[next] ? next : 'drones';
+  const to = VIEWS[next] ? next : 'drones';
+  if (to === 'settings' && tab !== 'settings' && VIEWS[tab]) backTab = tab;
+  tab = to;
   render();
   window.scrollTo(0, 0);
 }
