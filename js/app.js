@@ -1674,7 +1674,9 @@ function batteryDetail(id) {
   const build = () => { const b = findBattery(id); return b ? batteryBody(b) : null; };
   sheet(() => (findBattery(id) ? batTitle(findBattery(id)) : ''), build(), {
     live: build,
-    tools: [toolBtn('edit', t('Змінити'), () => batteryForm(findBattery(id))), toolBtn('delete', t('Видалити'), () => {
+    // NFC-мітка — значком у шапці поруч з олівцем, лише де телефон уміє (Chrome на Android)
+    tools: [nfcSupported() ? toolBtn('nfc', t('NFC-мітка'), () => nfcBindSheet(findBattery(id))) : null,
+      toolBtn('edit', t('Змінити'), () => batteryForm(findBattery(id))), toolBtn('delete', t('Видалити'), () => {
       const b = findBattery(id);
       confirmSheet(t('Видалити батарею #{n}?', { n: b.num }), t('Скасувати не можна.'), t('Видалити'), () => save({ batteries: { del: [id] } }));
     }, 'danger')],
@@ -1692,12 +1694,12 @@ function batteryBody(b) {
       [String(b.cycles?.length ?? 0), t('циклів')],
       [String(days), t('днів у стані')],
       [b.price ? fmt.num(Math.round(b.price)) : null, t('ціна, грн')]]),
-    h('p', { class: 'muted small card-sub' }, [b.connector, b.buyDate ? t('куплено {date}', { date: fmt.date(b.buyDate) }) : null].filter(Boolean).join(' · ')),
+    // Прив'язана мітка — словом у підрядку: кнопка в шапці не перемальовується, а підрядок — так
+    h('p', { class: 'muted small card-sub' }, [b.connector, b.buyDate ? t('куплено {date}', { date: fmt.date(b.buyDate) }) : null,
+      b.nfc ? t('NFC-мітка ✓') : null].filter(Boolean).join(' · ')),
     states,
     h('p', { class: 'muted small' }, t('Цикл — один заряд. Політ у журналі додає цикл сам, а сьогоднішній ще й ставить «Розряджена»; «+ цикл» — для зарядів поза журналом. «Заряджена» понад {n} дн. — нагадаю про зберігання.', { n: staleDays() })),
-    h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary'),
-      // NFC-мітка — лише де телефон уміє (Chrome на Android); прив'язана — кнопка каже це й дає перезаписати
-      nfcSupported() ? btn(b.nfc ? t('NFC-мітка ✓') : t('NFC-мітка'), () => nfcBindSheet(b)) : null),
+    h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary')),
     irBox(b),
     b.cycles?.length ? fold('bat-cycles', t('Цикли · {n}', { n: b.cycles.length }), h('ul', { class: 'changes' }, [...b.cycles].reverse().map((c) => h('li', {},
       [fmt.date(c.date), c.flightId && t('політ'), c.v && `${c.v} ${t('В/банку')}`, c.ir && `IR ${c.ir} ${t('мОм')}`].filter(Boolean).join(' · '))))) : null);

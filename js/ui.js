@@ -322,11 +322,12 @@ export function sheet(title, body, { actions = [], onClose, live, tools = [], le
   if (live) liveSheets.add(rebuild);
   // Червоні дії (кошик) — завжди ліворуч від назви, подалі від ✕: поряд із ним легко схибити
   const danger = [tools].flat(Infinity).filter((x) => x?.classList?.contains('danger'));
-  const rest = [tools].flat(Infinity).filter((x) => !danger.includes(x));
+  const rest = [tools].flat(Infinity).filter((x) => x && !danger.includes(x));
   const left = [danger, lead].flat(Infinity).filter(Boolean);
   const panel = h('section', { class: full ? 'sheet full' : 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': titleOf() },
     h('div', { class: 'sheet-grip' }),
-    h('header', { class: 'sheet-head' },
+    // Дві й більше кнопок у шапці (кошик, копія, олівець, ✕) стискали б назву — тоді назва окремим рядком на всю ширину
+    h('header', { class: `sheet-head${left.length + rest.length >= 2 ? ' stacked' : ''}` },
       left.length ? h('div', { class: 'sheet-lead' }, left) : null,
       h('h2', {}, titleOf()),
       h('div', { class: 'sheet-tools' }, rest,

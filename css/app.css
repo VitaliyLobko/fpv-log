@@ -561,6 +561,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sheet-tools { display: flex; flex: none; gap: 6px; }
 .sheet-lead { display: flex; flex: none; gap: 6px; }
 .sheet-lead + h2 { flex: 1; min-width: 0; }
+/* Шапка з двома й більше кнопками (як у Fishing Log): кнопки — рядком угорі, назва — під ними на всю ширину */
+.sheet-head.stacked { flex-wrap: wrap; row-gap: 2px; padding-bottom: 4px; }
+.sheet-head.stacked h2 { order: 3; flex: 1 0 100%; font-size: 21px; line-height: 1.25; text-wrap: balance; -webkit-line-clamp: 4; line-clamp: 4; }
+.sheet-head.stacked .sheet-tools { margin-left: auto; }
 .icon-btn.tool { display: grid; place-items: center; color: var(--text); }
 .icon-btn.tool svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
 .icon-btn.tool.danger { color: var(--shoot); }
