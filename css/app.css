@@ -896,3 +896,27 @@ button.row-main { padding: 0; border: 0; background: none; color: inherit; font:
   font-variant-numeric: tabular-nums; white-space: nowrap; text-overflow: ellipsis; }
 .readout small { color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.25; }
 .readouts + .card-sub { margin-bottom: 10px; }
+
+/* Вибір шторкою замість системного списку (listPicker, як у shooting-log): кнопка виглядає як поле, праворуч шеврон */
+.picker { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 6px 10px 6px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.picker:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.picker:active { background: var(--surface-2); }
+.picker .picker-main { flex: 1; min-width: 0; padding-block: 3px; }
+.picker .picker-main > span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.picker .picker-sub { font-size: 12px; color: var(--muted); }
+.picker .thumb { flex: none; width: 32px; height: 32px; border-radius: 8px; font-size: 13px; }
+.picker .thumb .ico svg { width: 18px; height: 18px; }
+.chevron { position: relative; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); }
+/* «>» — квадрат із двома рамками, повернутий; зсунуто, щоб по центру кружка була сама стрілка. У полі — донизу */
+.chevron::before { content: ""; position: absolute; left: 5px; top: 7px; width: 6px; height: 6px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); }
+.picker .chevron { transform: rotate(90deg); opacity: .7; }
+.picker-list .rows { gap: 6px; }
+.picker-list .rows + .rows { margin-top: 10px; }
+.picker-list .row { min-height: 52px; }
+.picker-list .thumb { width: 40px; height: 40px; border-radius: 10px; font-size: 15px; }
+.picker-cap { margin: 14px 2px 6px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.picker-list > .picker-cap:first-child { margin-top: 2px; }
+.picker-list .row.on { border-color: var(--accent); background: var(--accent-soft); }
+.picker-list .row.on .row-title { color: var(--accent-2); }

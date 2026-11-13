@@ -8,7 +8,7 @@ import { rateOn, refreshRates } from './usd.js';
 import { parseConfig } from './fcconfig.js';
 import { searchPlace, hourly, kpIndex, verdict, LIMITS } from './weather.js';
 import { repoOf, isNewer, latestTags, refreshLatest } from './releases.js';
-import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, icon, goTab, confirmed, fieldError, formError, swipeStep, pickStrip } from './ui.js';
+import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, icon, goTab, confirmed, fieldError, formError, swipeStep, pickStrip, listPicker } from './ui.js';
 
 let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
 let tab = 'drones';
@@ -394,6 +394,17 @@ const pickTile = (photoId, fallback) => {
 };
 const monoTile = (name) => { const m = monogram(name); return h('span', { class: 'thumb mono', style: `--h: ${hue(m)}` }, m); };
 
+// Рядки вибору шторкою (form → pick): фото чи значок ліворуч, під назвою — підказка; null — простий текст
+const leadThumb = (photoId, fallback) => { const p = findPhoto(photoId); return p ? h('img', { class: 'thumb', src: p.thumb, alt: '' }) : fallback; };
+const pickCat = (k) => (findCat(k) ? { lead: catThumb(k) } : null);
+const pickDrone = (id) => { const d = findDrone(id); return d && { lead: leadThumb(d.photoId, monoTile(d.name)), sub: kindLabel(d.kind) }; };
+const pickBat = (id) => {
+  const b = findBattery(id);
+  return b && { lead: batTile(b), title: [`#${b.num}`, b.brand].filter(Boolean).join(' · '),
+    sub: [b.mah && `${b.mah} ${t('мАг')}`, b.c && `${b.c}C`, batStateLabel(b.state || 'storage')].filter(Boolean).join(' · ') };
+};
+const pickItem = (id) => { const it = findItem(id); return it && { lead: leadThumb(it.photoId, catThumb(it.cat)), title: itemName(it), sub: [catLabel(it.cat), it.price ? fmt.uah(it.price) : null].filter(Boolean).join(' · ') }; };
+
 /** Велике фото в картці: кнопка — відкривається й з клавіатури. */
 const photoBtn = (src, onclick) => h('button', { type: 'button', class: 'photo-btn', 'aria-label': t('Відкрити фото'), onclick }, h('img', { class: 'drone-photo', src, alt: '' }));
 
@@ -636,9 +647,14 @@ function droneForm(d = null, { draft = null, file = null } = {}) {
   const lines = [...state.orders].sort((a, b) => collate(b.date, a.date)).flatMap((o) => o.lines
     .filter((l) => l.kind === 'drone' && !taken.has(`${o.id}|${l.id}`))
     .map((l) => [`${o.id}|${l.id}`, `${o.shop} · ${[l.brand, l.model].filter(Boolean).join(' ')} · ${fmt.date(o.date)}`]));
+  // У шторці вибору — позиція назвою, магазин і дата під нею
+  const pickLine = (v) => {
+    const [shop, name, date] = lines.find(([k]) => k === v)?.[1].split(' · ') ?? [];
+    return shop === undefined ? null : { lead: iconTile('receipt'), title: name || shop, sub: [shop, date].join(' · ') };
+  };
   const f = form([
     { name: 'name', label: t('Назва'), value: d?.name ?? draft?.name, required: true, placeholder: t('напр. 5″ фристайл') },
-    ...(lines.length ? [{ name: 'buy', label: t('Покупка'), type: 'select', options: [['', t('Ціна вручну')], { group: t('Із замовлення'), options: lines }],
+    ...(lines.length ? [{ name: 'buy', label: t('Покупка'), type: 'select', pick: pickLine, options: [['', t('Ціна вручну')], { group: t('Із замовлення'), options: lines }],
       value: boughtLine(d ?? {}) ? `${d.buy.orderId}|${d.buy.lineId}` : '' }] : []),
     { name: 'price', label: t('Ціна, грн'), type: 'number', value: d?.price, half: true, hint: t('Для BNF чи шолома; деталі рахуються окремо') },
     { name: 'buyDate', label: t('Куплено'), type: 'dmy', value: d?.buyDate, half: true },
@@ -794,7 +810,8 @@ function replaceSheet(droneId, slotId, preset = {}) {
   // Є підходящі деталі — стрічкою з фото чи значком категорії; решта складу — «Інше на складі…» з пошуком.
   // Приховане поле лишається джерелом значення. Підходящих немає — звичний список із групами
   const others = free.filter((it) => it.cat !== s.cat);
-  let picker = h('label', { class: 'field' }, h('span', { class: 'field-label' }, t('Нова деталь')), select);
+  let picker = h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('Нова деталь')), select);
+  if (!fits.length) listPicker(select, { title: t('Нова деталь'), item: pickItem });
   let othersBtn = null;
   if (fits.length) {
     const note = h('p', { class: 'muted small pick-note' });
@@ -863,7 +880,7 @@ async function replaceSlot(droneId, slotId, newId, outcome, reason, flightId = n
 function slotForm(d) {
   const f = form([
     { name: 'label', label: t('Назва слота'), required: true, placeholder: t('напр. Бузер') },
-    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions('other'), value: 'other' },
+    { name: 'cat', label: t('Категорія'), type: 'select', pick: pickCat, options: catOptions('other'), value: 'other' },
   ]);
   newCatOption(f.inputs.cat);
   const close = sheet(t('Новий слот'), f.el, {
@@ -1088,7 +1105,7 @@ function wishForm(w = null, { draft = null, file = null } = {}) {
     { name: 'name', label: t('Що'), value: src?.name, required: true, placeholder: t('напр. DJI O4 Air Unit') },
     { name: 'link', label: t('Посилання'), type: 'url', value: src?.link, placeholder: 'https://' },
     { name: 'price', label: t('Орієнтовна ціна'), type: 'number', value: src?.price, half: true },
-    { name: 'droneId', label: t('Для якого дрона'), type: 'select', half: true, value: src?.droneId ?? '',
+    { name: 'droneId', label: t('Для якого дрона'), type: 'select', pick: pickDrone, half: true, value: src?.droneId ?? '',
       options: [['', '—'], ...[...state.drones].sort((a, b) => collate(a.name, b.name)).map((d) => [d.id, d.name])] },
     { name: 'note', label: t('Нотатка'), type: 'textarea', rows: 2, value: src?.note },
   ]);
@@ -1126,7 +1143,7 @@ function itemForm(it = null, { preset = {}, onSaved = null, file = null } = {}) 
   const kind = src.kind ?? 'unit';
   const cons = kind === 'consumable';
   const fields = [
-    { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(src.cat), value: src.cat ?? (cons ? 'props' : 'other') },
+    { name: 'cat', label: t('Категорія'), type: 'select', pick: pickCat, options: catOptions(src.cat), value: src.cat ?? (cons ? 'props' : 'other') },
     { name: 'brand', label: t('Бренд'), value: src.brand, half: true },
     { name: 'model', label: t('Модель'), value: src.model, half: true, required: true },
     { name: 'specs', label: t('Характеристики'), type: 'textarea', rows: 2, value: src.specs },
@@ -1320,7 +1337,7 @@ function orderForm(o = null, draft = null) {
   const addLine = (l = {}) => {
     const lf = form([
       { name: 'kind', label: t('Вид'), type: 'select', options: [['unit', t('Деталь')], ['consumable', t('Розхідник')], ['drone', t('Дрон чи шолом цілим')]], value: l.kind ?? 'unit', half: true },
-      { name: 'cat', label: t('Категорія'), type: 'select', options: catOptions(l.cat), value: l.cat ?? 'other', half: true },
+      { name: 'cat', label: t('Категорія'), type: 'select', pick: pickCat, options: catOptions(l.cat), value: l.cat ?? 'other', half: true },
       { name: 'brand', label: t('Бренд'), value: l.brand, half: true },
       { name: 'model', label: t('Модель'), value: l.model, half: true, required: true },
       { name: 'price', label: t('Ціна за шт.'), type: 'number', value: l.price, half: true, required: true },
@@ -1837,7 +1854,7 @@ function flightForm(f = null) {
   const head = form([
     { name: 'date', label: t('Дата'), type: 'dmy', value: f?.date ?? today(), required: true, half: true },
     { name: 'place', label: t('Місце'), value: f?.place ?? places[0], list: 'places', half: true },
-    { name: 'droneId', label: t('Дрон'), type: 'select', options: drones.map((d) => [d.id, d.name]),
+    { name: 'droneId', label: t('Дрон'), type: 'select', pick: pickDrone, options: drones.map((d) => [d.id, d.name]),
       value: f?.droneId ?? (drones.some((d) => d.id === lastDrone) ? lastDrone : drones[0].id) },
   ]);
   const types = chips(FLIGHT_TYPES.map(([k, l]) => [k, t(l)]), type, (v) => { type = v; });
@@ -1849,7 +1866,7 @@ function flightForm(f = null) {
   const addBat = (x = {}) => {
     const used = batForms.map((e) => e.f.values().batteryId);
     const bf = form([
-      { name: 'batteryId', label: t('Батарея'), type: 'select', options: [['', t('Без номера')], ...usable.map((b) => [b.id, batTitle(b)])],
+      { name: 'batteryId', label: t('Батарея'), type: 'select', pick: pickBat, options: [['', t('Без номера')], ...usable.map((b) => [b.id, batTitle(b)])],
         value: x.batteryId !== undefined ? x.batteryId ?? '' : usable.find((b) => !used.includes(b.id))?.id ?? '' },
       { name: 'min', label: t('Хвилин у повітрі'), type: 'number', value: x.min, half: true, required: true },
     ]);
@@ -1862,12 +1879,17 @@ function flightForm(f = null) {
   // Падіння: що зламалось і, за бажанням, яку деталь зняти зламаною (звичне «Замінити»)
   const crashForm = form([
     { name: 'broke', label: t('Що зламалось'), value: f?.broke, placeholder: t('напр. пропелер, вал мотора') },
-    { name: 'slotId', label: t('Позначити деталь зламаною'), type: 'select', options: [] },
+    { name: 'slotId', label: t('Позначити деталь зламаною'), type: 'select', options: [], pick: (id) => {
+      const sl = findDrone(head.inputs.droneId.value)?.slots?.find((x) => x.id === id);
+      const p = sl && pickItem(sl.itemId);
+      return p && { ...p, sub: slotLabel(sl) };
+    } },
   ]);
   const fillSlots = () => {
     const d = findDrone(head.inputs.droneId.value);
     crashForm.inputs.slotId.replaceChildren(...selectOptions([['', t('— ні —')],
       ...(d?.slots ?? []).filter((sl) => findItem(sl.itemId)).map((sl) => [sl.id, `${slotLabel(sl)}: ${itemName(findItem(sl.itemId))}`])], ''));
+    crashForm.repaint('slotId');
   };
   fillSlots();
   head.inputs.droneId.addEventListener('change', fillSlots);

@@ -344,7 +344,8 @@ export function sheet(title, body, { actions = [], onClose, live, tools = [], le
     body.addEventListener('input', touch);
     body.addEventListener('change', touch);
     // Стрічка вибору (pickStrip) міняє приховане поле кодом: дотик, коліщатко, «‹ ›» чи Enter по ній — теж правка людини
-    body.addEventListener('click', (e) => { if (e.target.closest('.chips button, .bg-wheel')) touch(e); });
+    // Так само вибір шторкою (listPicker): дотик до кнопки-поля — початок правки, а чи змінилось — скаже знімок
+    body.addEventListener('click', (e) => { if (e.target.closest('.chips button, .bg-wheel, .picker')) touch(e); });
     for (const type of ['pointerdown', 'wheel']) body.addEventListener(type, (e) => { if (e.target.closest('.bg-wheel')) touch(e); }, { passive: true });
     dirty = () => touched && base !== null && snap() !== base;
   }
@@ -487,6 +488,7 @@ export function selectOptions(options, selected) {
  */
 export function form(fields) {
   const inputs = {};
+  const repaint = {};
   const el = h('div', { class: 'form' });
   for (const f of fields) {
     let input;
@@ -510,10 +512,12 @@ export function form(fields) {
       input.value = f.value ?? '';
     }
     inputs[f.name] = input;
-    // Чипи — не в <label>: тап по підпису «натискав» би перший чип
-    el.append(h(f.type === 'chips' ? 'div' : 'label', { class: `field ${f.wide ? 'wide' : ''} ${f.half ? 'half' : ''}` },
+    // Чипи й вибір шторкою — не в <label>: тап по підпису «натискав» би перший чип чи прихований select
+    const plain = f.type === 'chips' || (f.type === 'select' && !f.native);
+    el.append(h(plain ? 'div' : 'label', { class: `field ${f.wide ? 'wide' : ''} ${f.half ? 'half' : ''}` },
       f.label ? h('span', { class: 'field-label' }, f.label) : null, input,
       f.hint ? h('small', { class: 'muted' }, f.hint) : null));
+    if (f.type === 'select' && !f.native) repaint[f.name] = listPicker(input, { title: f.label, item: f.pick });
   }
   const values = () => {
     const out = {};
@@ -530,7 +534,66 @@ export function form(fields) {
     const v = values()[f.name];
     return (f.required && (v === '' || v === null)) || ((f.type === 'number' || f.type === 'dmy') && Number.isNaN(v));
   });
-  return { el, inputs, values, invalid };
+  // repaint(name) — після того як варіанти select перебудували кодом
+  return { el, inputs, values, invalid, repaint: (name) => repaint[name]?.() };
+}
+
+/**
+ * Вибір зі списку замість системного select (як у shooting-log): кнопка-поле, варіанти — рядками в шторці,
+ * групи optgroup — підписами. select лишається прихованим джерелом значення й шле change.
+ * item(value) → { lead, title, sub } для гарного рядка, null — текст option. Повертає перемальовування кнопки.
+ */
+export function listPicker(select, { title = '', item = null } = {}) {
+  const face = h('button', { type: 'button', class: 'picker' });
+  const describe = (o) => ({ title: o.textContent, ...(item?.(o.value) ?? {}) });
+  const paint = () => {
+    const o = select.selectedOptions[0];
+    const d = o ? describe(o) : { title: '—' };
+    face.replaceChildren(...[d.lead,
+      h('span', { class: 'picker-main' }, h('span', {}, d.title), d.sub ? h('span', { class: 'picker-sub' }, d.sub) : null),
+      h('span', { class: 'chevron', 'aria-hidden': 'true' })].filter(Boolean));
+    face.setAttribute('aria-label', title ? `${title}: ${d.title}` : d.title);
+  };
+  face.addEventListener('click', () => {
+    const pick = (value) => {
+      close();
+      if (value !== select.value) {
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      // Після обробників: «+ Нова категорія…» повертає попереднє значення без події
+      paint();
+    };
+    const row = (o) => {
+      const d = describe(o);
+      const on = o.value === select.value;
+      return h('button', { type: 'button', class: `row${on ? ' on' : ''}`, 'aria-current': on ? 'true' : null, onclick: () => pick(o.value) },
+        d.lead ?? null,
+        h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, d.title), d.sub ? h('span', { class: 'muted small' }, d.sub) : null));
+    };
+    // Пункти поза групами — одним списком, кожна група — під своїм підписом
+    const parts = [];
+    let loose = null;
+    for (const node of select.children) {
+      if (node.tagName === 'OPTGROUP') {
+        loose = null;
+        const opts = [...node.children].filter((o) => !o.hidden);
+        if (opts.length) parts.push(h('div', { class: 'picker-cap' }, node.label), h('div', { class: 'rows' }, opts.map(row)));
+      } else if (!node.hidden) {
+        if (!loose) { loose = h('div', { class: 'rows' }); parts.push(loose); }
+        loose.append(row(node));
+      }
+    }
+    const list = h('div', { class: 'picker-list' }, parts);
+    const close = sheet(title, list);
+    // Довгий список — одразу на поточному виборі
+    requestAnimationFrame(() => list.querySelector('.row.on')?.scrollIntoView({ block: 'center' }));
+  });
+  select.hidden = true;
+  select.after(face);
+  paint();
+  select.addEventListener('change', paint);
+  return paint;
 }
 
 /** «2026-11-03» → «03.11.2026». */
