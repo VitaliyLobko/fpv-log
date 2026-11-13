@@ -28,6 +28,7 @@ const ASSETS = [
   './js/vendor/qrcode.js',
   './js/weather.js',
   './js/releases.js',
+  './js/nfc.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',

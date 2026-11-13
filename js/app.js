@@ -8,7 +8,8 @@ import { rateOn, refreshRates } from './usd.js';
 import { parseConfig } from './fcconfig.js';
 import { searchPlace, hourly, kpIndex, verdict, LIMITS } from './weather.js';
 import { repoOf, isNewer, latestTags, refreshLatest } from './releases.js';
-import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, icon, goTab, confirmed, fieldError, formError, swipeStep, pickStrip, listPicker } from './ui.js';
+import { h, fmt, sheet, refreshSheets, toast, form, chips, confirmSheet, selectOptions, toolBtn, toolIcon, icon, goTab, confirmed, fieldError, formError, swipeStep, pickStrip, listPicker, vibrate } from './ui.js';
+import { nfcSupported, listen, writeUrl } from './nfc.js';
 
 let state = { drones: [], items: [], orders: [], batteries: [], flights: [], wishes: [], photos: [], prefs: [] };
 let tab = 'drones';
@@ -1463,13 +1464,149 @@ function renderBatteries() {
   return h('div', {}, staleBanner(),
     h('div', { class: 'rows' }, live.map(batRow)),
     dead.length ? box(t('Списані'), h('div', { class: 'rows' }, dead.map(batRow))) : null,
-    h('div', { class: 'btn-row' }, btn(t('Друк наклейок'), () => labelsSheet(live))));
+    h('div', { class: 'btn-row' }, nfcSupported() ? btn(t('Сканувати NFC-мітки'), () => nfcFindSheet()) : null,
+      btn(t('Друк наклейок'), () => labelsSheet(live))));
 }
 
 // ---------- наклейки з QR ----------
 
 /** Адреса батареї для QR: камера телефона відкриє застосунок одразу на «+ цикл». Хост — поточний, тож працює й не на GitHub Pages. */
 const batUrl = (b) => `${location.origin}${location.pathname}#bat=${encodeURIComponent(b.id)}`;
+
+// ---------- NFC-мітки батарей ----------
+
+/** Посилання для NFC-мітки: дотик телефоном відкриває картку батареї (без «+ цикл» — просто подивитись, що це). */
+const nfcUrl = (b) => `${location.origin}${location.pathname}#nfc=${encodeURIComponent(b.id)}`;
+
+/** Батарея за міткою: за посиланням на ній (#nfc= чи QR-шне #bat=), інакше — за номером мітки. */
+function batteryByTag({ uid, url }) {
+  const id = url?.match(/#(?:nfc|bat)=([^&]+)$/)?.[1];
+  return (id && findBattery(decodeURIComponent(id))) || (uid && state.batteries.find((b) => b.nfc === uid)) || null;
+}
+
+/** Шторка очікування мітки: значок із хвилями й рядок стану під ним; top/bottom — що ще в ній (вибір дії, список відміченого). */
+function nfcSheet(title, onClose, { top = null, bottom = null } = {}) {
+  const msg = h('p', { class: 'nfc-msg', role: 'status' });
+  const close = sheet(title, h('div', {}, top,
+    h('div', { class: 'nfc-wait' }, h('div', { class: 'nfc-pulse', 'aria-hidden': 'true' }, icon('nfc')), msg), bottom), { onClose });
+  const say = (text, tone = '') => { msg.textContent = text; msg.className = `nfc-msg ${tone}`.trim(); };
+  return { close, say };
+}
+
+/**
+ * Прив'язати мітку до батареї: прочитати номер → (мітка іншої батареї — підтвердити повторним дотиком) →
+ * записати посилання → перевірити читанням. Номер мітки зберігається, щойно прочитаний: пошук за ним працює
+ * навіть тоді, коли посилання не вдалося перевірити.
+ */
+function nfcBindSheet(b) {
+  const link = nfcUrl(b);
+  const ctl = new AbortController();
+  let stop = null;
+  let phase = 'read';
+  let moveUid = null;
+  let verified = null;
+  const ui = nfcSheet(t('NFC-мітка · #{n}', { n: b.num }), () => { ctl.abort(); stop?.(); });
+  ui.say(t('Піднесіть мітку до задньої кришки телефона й тримайте, доки не з’явиться «Готово»'));
+  const bind = async (uid) => {
+    const cur = findBattery(b.id) ?? b;
+    const other = uid ? state.batteries.filter((x) => x.nfc === uid && x.id !== b.id) : [];
+    await save({ batteries: { put: [{ ...cur, nfc: uid || null, nfcAt: Date.now() }, ...other.map((x) => ({ ...x, nfc: null }))] } }, [b.id]);
+  };
+  const onTag = async ({ uid, url }) => {
+    if (phase === 'verify') { if (url === link) verified?.(); return; }
+    if (phase !== 'read') return;
+    const other = uid && state.batteries.find((x) => x.nfc === uid && x.id !== b.id);
+    if (other && moveUid !== uid) {
+      moveUid = uid;
+      ui.say(t('Ця мітка вже на батареї #{n}. Піднесіть її ще раз — перенесу на #{m}', { n: other.num, m: b.num }), 'warn');
+      return;
+    }
+    phase = 'write';
+    ui.say(t('Записую посилання — не прибирайте мітку…'));
+    try {
+      await writeUrl(link, ctl.signal);
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      phase = 'read';
+      ui.say(err.message, 'bad');
+      return;
+    }
+    await bind(uid);
+    phase = 'verify';
+    const ok = await new Promise((resolve) => { verified = () => resolve(true); setTimeout(() => resolve(false), 6000); });
+    if (ctl.signal.aborted) return;
+    if (ok) {
+      phase = 'done';
+      ui.say(t('Готово: мітка на #{n}. Дотик телефоном відкриє цю батарею', { n: b.num }), 'ok');
+      vibrate(30);
+      setTimeout(ui.close, 1600);
+    } else {
+      ui.say(t('Мітку прив’язано, але посилання не перевірено — піднесіть її ще раз'), 'warn');
+    }
+  };
+  listen(onTag, (text) => { if (phase === 'read' || phase === 'verify') ui.say(text, 'bad'); })
+    .then((s) => { if (ctl.signal.aborted) s(); else stop = s; }, (err) => ui.say(err.message, 'bad'));
+}
+
+// Що робити з батареєю, чию мітку піднесли: відкрити картку або одразу відмітити (підряд, без карток)
+const NFC_MODES = [['open', 'Відкрити картку'], ['charged', 'Заряджена'], ['storage', 'Зберігання'], ['empty', 'Розряджена'], ['cycle', '+ цикл']];
+const NFC_MODE_KEY = 'fpv-log:nfc-mode';
+
+/**
+ * Сканування міток: «Відкрити картку» — дотик відкриває батарею; інший режим — кожна піднесена батарея одразу
+ * отримує стан чи цикл, а внизу росте список відміченого з «Скасувати» в рядку. Режим запам'ятовується.
+ */
+function nfcFindSheet() {
+  let stop = null;
+  let gone = false;
+  let mode = NFC_MODES.some(([k]) => k === recall(NFC_MODE_KEY)) ? recall(NFC_MODE_KEY) : 'open';
+  const hint = () => (mode === 'open' ? t('Піднесіть мітку — відкрию її батарею')
+    : mode === 'cycle' ? t('Підносьте мітки по черзі — кожній батареї додам цикл')
+      : t('Підносьте мітки по черзі — кожна батарея одразу стане «{s}»', { s: batStateLabel(mode) }));
+  const modes = chips(NFC_MODES.map(([k, l]) => [k, t(l)]), mode, (v) => { mode = v; remember(NFC_MODE_KEY, v); ui.say(hint()); });
+  modes.classList.add('nfc-modes');
+  const log = h('div', { class: 'rows nfc-log' });
+  const ui = nfcSheet(t('NFC-мітки батарей'), () => { gone = true; stop?.(); }, { top: modes, bottom: log });
+  ui.say(hint());
+  // Мітка лежить у полі — Android шле той самий дотик кілька разів; одна батарея — не частіше ніж раз на 3 с
+  const seen = new Map();
+  const onTag = async (tag) => {
+    const b = batteryByTag(tag);
+    if (!b) { ui.say(t('Ця мітка не прив’язана. Відкрийте батарею → «NFC-мітка», щоб прив’язати'), 'warn'); return; }
+    if (mode === 'open') {
+      vibrate(30);
+      ui.close();
+      batteryDetail(b.id);
+      return;
+    }
+    if (Date.now() - (seen.get(b.id) ?? 0) < 3000) return;
+    seen.set(b.id, Date.now());
+    const m = mode;
+    const prev = findBattery(b.id) ?? b;
+    const cycle = { id: db.uid(), date: today() };
+    const next = m === 'cycle' ? { ...prev, cycles: [...(prev.cycles ?? []), cycle] } : { ...prev, state: m, stateAt: Date.now() };
+    await save({ batteries: { put: [next] } }, [b.id]);
+    vibrate(30);
+    const what = m === 'cycle' ? t('+ цикл (усього {n})', { n: next.cycles.length }) : batStateLabel(m);
+    ui.say(t('#{n} → {what}', { n: b.num, what }), 'hit');
+    // Скасувати — повернути як було саме цю відмітку: цикл прибрати, стан — попередній
+    const undo = async () => {
+      const cur = findBattery(b.id);
+      if (cur) {
+        await save({ batteries: { put: [m === 'cycle' ? { ...cur, cycles: (cur.cycles ?? []).filter((c) => c.id !== cycle.id) }
+          : { ...cur, state: prev.state, stateAt: prev.stateAt }] } }, [b.id]);
+      }
+      line.remove();
+      seen.delete(b.id);
+    };
+    const line = h('div', { class: 'row nfc-hit' }, batTile(next),
+      h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, [`#${b.num}`, b.brand].filter(Boolean).join(' · ')), h('span', { class: 'muted small' }, what)),
+      h('button', { type: 'button', class: 'link-btn', onclick: undo }, t('Скасувати')));
+    log.prepend(line);
+  };
+  listen(onTag, (text) => ui.say(text, 'bad'))
+    .then((s) => { if (gone) s(); else stop = s; }, (err) => ui.say(err.message, 'bad'));
+}
 
 /** Вибір батарей для друку (усі одразу позначені) → аркуш наклейок: великий номер, S і мАг, QR. */
 function labelsSheet(list) {
@@ -1558,7 +1695,9 @@ function batteryBody(b) {
     h('p', { class: 'muted small card-sub' }, [b.connector, b.buyDate ? t('куплено {date}', { date: fmt.date(b.buyDate) }) : null].filter(Boolean).join(' · ')),
     states,
     h('p', { class: 'muted small' }, t('Цикл — один заряд. Політ у журналі додає цикл сам, а сьогоднішній ще й ставить «Розряджена»; «+ цикл» — для зарядів поза журналом. «Заряджена» понад {n} дн. — нагадаю про зберігання.', { n: staleDays() })),
-    h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary')),
+    h('div', { class: 'btn-row' }, btn(t('+ цикл'), () => cycleSheet(b), 'primary'),
+      // NFC-мітка — лише де телефон уміє (Chrome на Android); прив'язана — кнопка каже це й дає перезаписати
+      nfcSupported() ? btn(b.nfc ? t('NFC-мітка ✓') : t('NFC-мітка'), () => nfcBindSheet(b)) : null),
     irBox(b),
     b.cycles?.length ? fold('bat-cycles', t('Цикли · {n}', { n: b.cycles.length }), h('ul', { class: 'changes' }, [...b.cycles].reverse().map((c) => h('li', {},
       [fmt.date(c.date), c.flightId && t('політ'), c.v && `${c.v} ${t('В/банку')}`, c.ir && `IR ${c.ir} ${t('мОм')}`].filter(Boolean).join(' · '))))) : null);
@@ -2661,6 +2800,16 @@ let backTab = 'drones';
 let shownTab = null;
 
 function route() {
+  // NFC-мітка: #nfc=<id> — лише картка батареї (подивитись, що це); адреса стає звичайною вкладкою
+  const nfc = location.hash.match(/^#nfc=(.+)$/)?.[1];
+  if (nfc) {
+    history.replaceState(null, '', '#batteries');
+    tab = 'batteries';
+    render();
+    const b = findBattery(decodeURIComponent(nfc));
+    if (b) batteryDetail(b.id); else toast(t('Батарею з мітки не знайдено — можливо, ще не синхронізовано'));
+    return;
+  }
   // QR з наклейки: #bat=<id> — картка батареї й одразу «+ цикл»; адреса стає звичайною вкладкою
   const bat = location.hash.match(/^#bat=(.+)$/)?.[1];
   if (bat) {

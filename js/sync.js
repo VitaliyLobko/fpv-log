@@ -114,6 +114,17 @@ export function preload() {
   if (configured() && navigator.onLine) loadGis().then(client).catch(() => {});
 }
 
+let authPending = null;
+
+/** Вікно Google — одне на раз: тап по «увійти» сам є дотиком, і без цього вікно запитувалось би двічі. */
+function requestToken(c, prompt) {
+  authPending ??= new Promise((resolve, reject) => {
+    authWaiter = { resolve, reject };
+    c.requestAccessToken({ prompt, hint: conf.email || undefined });
+  }).finally(() => { authPending = null; });
+  return authPending;
+}
+
 /** Викликати лише з обробника тапу/кліку — інакше браузер заблокує вікно входу. */
 export async function connect() {
   // Увійшли в іншому застосунку автора менш ніж годину тому — вікно Google не потрібне
@@ -123,10 +134,7 @@ export async function connect() {
       preload();
       throw new Error(t('Google ще завантажується — натисніть ще раз за секунду'));
     }
-    await new Promise((resolve, reject) => {
-      authWaiter = { resolve, reject };
-      c.requestAccessToken({ prompt: conf.consented ? '' : 'consent', hint: conf.email || undefined });
-    });
+    await requestToken(c, conf.consented ? '' : 'consent');
   }
   conf.enabled = true;
   conf.consented = true;
@@ -138,20 +146,19 @@ let lastRefresh = 0;
 
 /**
  * Ключ Диска діє годину, у фоні його не продовжити. Тож оновлюємо його з натискання, яке людина й так
- * зробила, — збереження запису: вікно Google мелькає й закривається само (згоду вже дано).
+ * зробила, — будь-якого дотику в застосунку (як у Марнотраті) чи збереження: вікно Google мелькає
+ * й закривається само (згоду вже дано). Новий ключ спільний — підхоплять й інші застосунки автора.
  * Браузер дозволяє вікно лише кілька секунд після натискання — без активного жесту не пробуємо.
+ * gap — не частіше: дотики йдуть часто, і якщо Google не дав ключа, вікно не мелькало б на кожен.
  */
-function refreshOnSave() {
-  if (!conf.enabled || !conf.consented || tokenValid() || authWaiter || !navigator.onLine) return;
+function refreshByGesture(gap) {
+  if (!conf.enabled || !conf.consented || tokenValid() || authPending || !navigator.onLine) return;
   if (navigator.userActivation && !navigator.userActivation.isActive) return;
-  if (Date.now() - lastRefresh < 60_000) return;
+  if (Date.now() - lastRefresh < gap) return;
   const c = client();
   if (!c) { preload(); return; }
   lastRefresh = Date.now();
-  new Promise((resolve, reject) => {
-    authWaiter = { resolve, reject };
-    c.requestAccessToken({ prompt: '', hint: conf.email || undefined });
-  }).then(syncNow, () => set('auth', t('Натисніть, щоб увійти в Google')));
+  requestToken(c, '').then(syncNow, () => set('auth', t('Натисніть, щоб увійти в Google')));
 }
 
 export function disconnect() {
@@ -462,9 +469,11 @@ export function schedule(ms = 2000) {
 
 window.addEventListener('db-change', () => {
   if (!conf.enabled) return;
-  refreshOnSave();
+  refreshByGesture(60_000);
   schedule();
 });
+// Будь-який дотик (фаза перехоплення — до обробників застосунку, тож і тап по «увійти» тут уже врахований)
+document.addEventListener('pointerup', () => refreshByGesture(60 * 60_000), true);
 window.addEventListener('online', () => { if (conf.enabled) { preload(); schedule(500); } });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && conf.enabled) schedule(300);
